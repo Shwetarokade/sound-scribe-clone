@@ -2,7 +2,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mic, Waveform, Users, Zap } from "lucide-react";
+import { Mic, AudioWaveform, Users, Zap } from "lucide-react";
 
 const Landing = () => {
   return (
@@ -58,7 +58,7 @@ const Landing = () => {
           <div className="grid md:grid-cols-3 gap-8">
             <Card>
               <CardHeader>
-                <Waveform className="h-12 w-12 text-primary mb-4" />
+                <AudioWaveform className="h-12 w-12 text-primary mb-4" />
                 <CardTitle>High Quality Audio</CardTitle>
                 <CardDescription>
                   Generate crystal clear audio with professional studio quality
