@@ -1,47 +1,141 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Play, Pause, Download, Volume2 } from "lucide-react";
+import { Play, Pause, Download, Volume2, Upload, FileText } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock voices - replace with real data from Supabase
-const mockVoices = [
-  { id: "1", name: "Professional Speaker" },
-  { id: "2", name: "Friendly Narrator" },
-  { id: "3", name: "Character Voice" }
-];
+interface Voice {
+  id: string;
+  name: string;
+  language: string;
+  category: string;
+  description?: string;
+}
 
 const GenerateVoice = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState("");
   const [text, setText] = useState("");
+  const [outputLanguage, setOutputLanguage] = useState("en");
   const [speed, setSpeed] = useState([1.0]);
   const [pitch, setPitch] = useState([1.0]);
+  const [tone, setTone] = useState("neutral");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<string | null>(null);
 
+  const languages = [
+    { value: "en", label: "English" },
+    { value: "es", label: "Spanish" },
+    { value: "fr", label: "French" },
+    { value: "de", label: "German" },
+    { value: "it", label: "Italian" },
+    { value: "pt", label: "Portuguese" },
+    { value: "ru", label: "Russian" },
+    { value: "ja", label: "Japanese" },
+    { value: "ko", label: "Korean" },
+    { value: "zh", label: "Chinese" }
+  ];
+
+  const tones = [
+    { value: "neutral", label: "Neutral" },
+    { value: "friendly", label: "Friendly" },
+    { value: "professional", label: "Professional" },
+    { value: "energetic", label: "Energetic" },
+    { value: "calm", label: "Calm" },
+    { value: "cheerful", label: "Cheerful" }
+  ];
+
+  // Fetch user's voices from Supabase
+  useEffect(() => {
+    const fetchVoices = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('voices')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching voices:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load your voices.",
+          variant: "destructive"
+        });
+      } else {
+        setVoices(data || []);
+      }
+    };
+
+    fetchVoices();
+  }, [user, toast]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        setText(content);
+      };
+      reader.readAsText(file);
+    }
+  };
+
   const handleGenerate = async () => {
-    if (!selectedVoice || !text.trim()) return;
+    if (!selectedVoice || !text.trim()) {
+      toast({
+        title: "Error",
+        description: "Please select a voice and enter text to generate.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     setIsGenerating(true);
     
-    // TODO: Implement actual voice generation
-    console.log("Generating voice:", {
-      voiceId: selectedVoice,
-      text,
-      speed: speed[0],
-      pitch: pitch[0]
-    });
+    try {
+      // TODO: Implement actual voice generation API call
+      console.log("Generating voice:", {
+        voiceId: selectedVoice,
+        text,
+        outputLanguage,
+        speed: speed[0],
+        pitch: pitch[0],
+        tone
+      });
 
-    // Simulate generation process
-    setTimeout(() => {
-      setIsGenerating(false);
+      // Simulate generation process
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Mock generated audio URL
       setGeneratedAudio("mock-audio-url");
-    }, 3000);
+      
+      toast({
+        title: "Success!",
+        description: "Voice generated successfully.",
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate voice. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handlePlayPause = () => {
@@ -53,6 +147,10 @@ const GenerateVoice = () => {
   const handleDownload = () => {
     // TODO: Implement audio download
     console.log("Downloading audio");
+    toast({
+      title: "Download",
+      description: "Audio download feature coming soon!",
+    });
   };
 
   return (
@@ -64,15 +162,31 @@ const GenerateVoice = () => {
           <CardHeader>
             <CardTitle>Text to Speech</CardTitle>
             <CardDescription>
-              Enter the text you want to convert to speech
+              Enter text or upload a file to convert to speech
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center space-x-2 mb-4">
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".txt,.pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Button type="button" variant="outline" size="sm">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload File
+                </Button>
+              </label>
+              <span className="text-xs text-muted-foreground">TXT or PDF</span>
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="text">Text Content</Label>
               <Textarea
                 id="text"
-                placeholder="Enter your text here..."
+                placeholder="Enter your text here or upload a file..."
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={8}
@@ -98,12 +212,38 @@ const GenerateVoice = () => {
               <Label>Select Voice</Label>
               <Select value={selectedVoice} onValueChange={setSelectedVoice}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a voice" />
+                  <SelectValue placeholder="Choose from your voice library" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockVoices.map((voice) => (
+                  {voices.map((voice) => (
                     <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name}
+                      <div className="flex flex-col">
+                        <span>{voice.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {voice.category} • {voice.language.toUpperCase()}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {voices.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No voices found. Add voices in the "Add Voice" tab first.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Output Language</Label>
+              <Select value={outputLanguage} onValueChange={setOutputLanguage}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {languages.map((lang) => (
+                    <SelectItem key={lang.value} value={lang.value}>
+                      {lang.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -132,6 +272,22 @@ const GenerateVoice = () => {
                 step={0.1}
                 className="w-full"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tone</Label>
+              <Select value={tone} onValueChange={setTone}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {tones.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <Button 
@@ -199,6 +355,7 @@ const GenerateVoice = () => {
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
+            <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No recent generations yet.</p>
             <p className="text-sm mt-1">Generated audio will appear here.</p>
           </div>
