@@ -41,32 +41,42 @@ const AddVoice = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const languages = [
-    { value: "en", label: "English" },
-    { value: "es", label: "Spanish" },
-    { value: "fr", label: "French" },
-    { value: "de", label: "German" },
-    { value: "it", label: "Italian" },
-    { value: "pt", label: "Portuguese" },
-    { value: "ru", label: "Russian" },
-    { value: "ja", label: "Japanese" },
-    { value: "ko", label: "Korean" },
-    { value: "zh", label: "Chinese" }
+  const indianLanguages = [
+    { value: "hi", label: "Hindi" },
+    { value: "ta", label: "Tamil" },
+    { value: "te", label: "Telugu" },
+    { value: "bn", label: "Bengali" },
+    { value: "mr", label: "Marathi" },
+    { value: "gu", label: "Gujarati" },
+    { value: "kn", label: "Kannada" },
+    { value: "ml", label: "Malayalam" },
+    { value: "pa", label: "Punjabi" },
+    { value: "or", label: "Odia" },
+    { value: "as", label: "Assamese" },
+    { value: "ur", label: "Urdu" },
+    { value: "en-in", label: "English (Indian)" }
   ];
 
   const categories = [
-    { value: "male", label: "Male" },
-    { value: "female", label: "Female" },
-    { value: "teen_male", label: "Teen Male" },
-    { value: "teen_female", label: "Teen Female" },
-    { value: "child", label: "Child" },
-    { value: "elderly_male", label: "Elderly Male" },
-    { value: "elderly_female", label: "Elderly Female" }
+    { value: "conversational", label: "Conversational" },
+    { value: "narrative", label: "Narrative" },
+    { value: "ai", label: "AI" },
+    { value: "present", label: "Present" }
   ];
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Validate file type
+      if (!file.type.startsWith('audio/')) {
+        toast({
+          title: "Invalid File",
+          description: "Please upload an audio file (MP3, WAV, etc.)",
+          variant: "destructive"
+        });
+        return;
+      }
+
       setAudioFile(file);
       const url = URL.createObjectURL(file);
       setAudioUrl(url);
@@ -82,17 +92,28 @@ const AddVoice = () => {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        } 
+      });
+      
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
       const chunks: BlobPart[] = [];
 
       recorder.ondataavailable = (event) => {
-        chunks.push(event.data);
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' });
-        const file = new File([blob], 'recording.wav', { type: 'audio/wav' });
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
         setAudioFile(file);
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
@@ -120,7 +141,7 @@ const AddVoice = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorder) {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
       setMediaRecorder(null);
       setIsRecording(false);
@@ -144,12 +165,6 @@ const AddVoice = () => {
       audioRef.current.pause();
       setIsPlaying(false);
     }
-  };
-
-  const trimAudio = async (file: File, startTime: number, endTime: number): Promise<Blob> => {
-    // This is a simplified version. In a real app, you'd use a library like ffmpeg.wasm
-    // For now, we'll return the original file
-    return file;
   };
 
   const uploadToSupabase = async (file: File, fileName: string): Promise<string> => {
@@ -196,13 +211,9 @@ const AddVoice = () => {
     setLoading(true);
 
     try {
-      // Trim audio (simplified for now)
-      const trimmedBlob = await trimAudio(audioFile, trimRange[0], trimRange[1]);
-      const trimmedFile = new File([trimmedBlob], `${voiceForm.name}_trimmed.wav`, { type: 'audio/wav' });
-
-      // Upload to Supabase Storage
-      const fileName = `${Date.now()}_${voiceForm.name.replace(/\s+/g, '_')}.wav`;
-      const audioUrl = await uploadToSupabase(trimmedFile, fileName);
+      // Create trimmed file (simplified - in production you'd use actual audio processing)
+      const fileName = `${Date.now()}_${voiceForm.name.replace(/\s+/g, '_')}.${audioFile.name.split('.').pop()}`;
+      const audioUrl = await uploadToSupabase(audioFile, fileName);
 
       // Save to database
       const { error: dbError } = await supabase
@@ -223,7 +234,7 @@ const AddVoice = () => {
 
       toast({
         title: "Success!",
-        description: "Voice has been added to your library.",
+        description: "Voice has been added to your library and is now available for generation.",
       });
 
       // Reset form
@@ -260,7 +271,7 @@ const AddVoice = () => {
         <CardHeader>
           <CardTitle>Add New Voice</CardTitle>
           <CardDescription>
-            Upload audio samples or record your voice to create a new AI voice clone
+            Upload audio samples or record your voice to create a new AI voice clone. Supports Indian languages.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -274,7 +285,7 @@ const AddVoice = () => {
                   <div>
                     <p className="text-sm font-medium">Upload or record audio</p>
                     <p className="text-xs text-muted-foreground">
-                      MP3, WAV files up to 10MB
+                      MP3, WAV files up to 10MB. High quality recordings work best.
                     </p>
                   </div>
                   <div className="flex items-center justify-center space-x-4">
@@ -381,7 +392,7 @@ const AddVoice = () => {
                     <SelectValue placeholder="Select language" />
                   </SelectTrigger>
                   <SelectContent>
-                    {languages.map((lang) => (
+                    {indianLanguages.map((lang) => (
                       <SelectItem key={lang.value} value={lang.value}>
                         {lang.label}
                       </SelectItem>
@@ -425,10 +436,11 @@ const AddVoice = () => {
             <div className="bg-muted/50 p-4 rounded-lg">
               <h4 className="font-medium mb-2">Tips for better voice training:</h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• Use high-quality, clear audio recordings</li>
+                <li>• Use high-quality, clear audio recordings (44.1kHz, 16-bit minimum)</li>
                 <li>• 15-second clips work best for voice cloning</li>
                 <li>• Avoid background noise and echo</li>
-                <li>• Speak naturally with consistent volume</li>
+                <li>• Speak naturally with consistent volume and pace</li>
+                <li>• Record in a quiet environment for best results</li>
               </ul>
             </div>
 

@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Download, Trash2, Search, Mic } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Play, Pause, Download, Trash2, Search, Mic, Heart, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +27,35 @@ const VoiceLibrary = () => {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [languageFilter, setLanguageFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  const indianLanguages = [
+    { value: "all", label: "All Languages" },
+    { value: "hi", label: "Hindi" },
+    { value: "ta", label: "Tamil" },
+    { value: "te", label: "Telugu" },
+    { value: "bn", label: "Bengali" },
+    { value: "mr", label: "Marathi" },
+    { value: "gu", label: "Gujarati" },
+    { value: "kn", label: "Kannada" },
+    { value: "ml", label: "Malayalam" },
+    { value: "pa", label: "Punjabi" },
+    { value: "or", label: "Odia" },
+    { value: "as", label: "Assamese" },
+    { value: "ur", label: "Urdu" },
+    { value: "en-in", label: "English (Indian)" }
+  ];
+
+  const categories = [
+    { value: "all", label: "All Categories" },
+    { value: "conversational", label: "Conversational" },
+    { value: "narrative", label: "Narrative" },
+    { value: "ai", label: "AI" },
+    { value: "present", label: "Present" }
+  ];
 
   // Fetch voices from Supabase
   useEffect(() => {
@@ -56,11 +85,16 @@ const VoiceLibrary = () => {
     fetchVoices();
   }, [user, toast]);
 
-  const filteredVoices = voices.filter(voice =>
-    voice.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    voice.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    voice.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredVoices = voices.filter(voice => {
+    const matchesSearch = voice.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      voice.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      voice.category.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesLanguage = languageFilter === "all" || voice.language === languageFilter;
+    const matchesCategory = categoryFilter === "all" || voice.category === categoryFilter;
+    
+    return matchesSearch && matchesLanguage && matchesCategory;
+  });
 
   const handlePlayPause = (voiceId: string, audioUrl: string) => {
     if (playingVoice === voiceId) {
@@ -70,7 +104,28 @@ const VoiceLibrary = () => {
       setPlayingVoice(voiceId);
       // TODO: Implement actual audio playback
       console.log("Playing voice:", voiceId, audioUrl);
+      
+      // Simulate playback duration
+      setTimeout(() => setPlayingVoice(null), 3000);
     }
+  };
+
+  const toggleFavorite = (voiceId: string) => {
+    const newFavorites = new Set(favorites);
+    if (favorites.has(voiceId)) {
+      newFavorites.delete(voiceId);
+      toast({
+        title: "Removed from Favorites",
+        description: "Voice removed from your favorites list.",
+      });
+    } else {
+      newFavorites.add(voiceId);
+      toast({
+        title: "Added to Favorites",
+        description: "Voice added to your favorites list.",
+      });
+    }
+    setFavorites(newFavorites);
   };
 
   const handleDelete = async (voiceId: string, audioUrl: string) => {
@@ -126,10 +181,18 @@ const VoiceLibrary = () => {
   };
 
   const getCategoryBadgeVariant = (category: string) => {
-    if (category.includes('male')) return 'default';
-    if (category.includes('female')) return 'secondary';
-    if (category.includes('teen')) return 'outline';
-    return 'default';
+    switch (category) {
+      case 'conversational': return 'default';
+      case 'narrative': return 'secondary';
+      case 'ai': return 'outline';
+      case 'present': return 'destructive';
+      default: return 'default';
+    }
+  };
+
+  const getLanguageLabel = (langCode: string) => {
+    const lang = indianLanguages.find(l => l.value === langCode);
+    return lang?.label || langCode.toUpperCase();
   };
 
   if (loading) {
@@ -145,15 +208,45 @@ const VoiceLibrary = () => {
 
   return (
     <div className="space-y-6">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search voices by name, category, or description..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* Search and Filters */}
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search voices by name, category, or description..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <div className="flex gap-4">
+          <Select value={languageFilter} onValueChange={setLanguageFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by language" />
+            </SelectTrigger>
+            <SelectContent>
+              {indianLanguages.map((lang) => (
+                <SelectItem key={lang.value} value={lang.value}>
+                  {lang.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat.value} value={cat.value}>
+                  {cat.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Voice Cards */}
@@ -163,10 +256,22 @@ const VoiceLibrary = () => {
             <Card key={voice.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex-1">
                     <CardTitle className="text-lg flex items-center space-x-2">
                       <Mic className="h-4 w-4" />
                       <span>{voice.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleFavorite(voice.id)}
+                        className="p-1 h-auto"
+                      >
+                        {favorites.has(voice.id) ? (
+                          <Heart className="h-4 w-4 fill-red-500 text-red-500" />
+                        ) : (
+                          <Heart className="h-4 w-4" />
+                        )}
+                      </Button>
                     </CardTitle>
                     {voice.description && (
                       <CardDescription className="text-sm">
@@ -175,14 +280,14 @@ const VoiceLibrary = () => {
                     )}
                   </div>
                   <Badge variant={getCategoryBadgeVariant(voice.category)}>
-                    {voice.category.replace(/_/g, ' ')}
+                    {voice.category}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Language: {voice.language.toUpperCase()}</p>
+                    <p>Language: {getLanguageLabel(voice.language)}</p>
                     <p>Created: {formatDate(voice.created_at)}</p>
                     {voice.duration && (
                       <p>Duration: {Math.round(voice.duration)}s</p>
@@ -216,6 +321,14 @@ const VoiceLibrary = () => {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+
+                  {playingVoice === voice.id && (
+                    <div className="mt-2">
+                      <div className="w-full bg-muted rounded-full h-1">
+                        <div className="bg-primary h-1 rounded-full animate-pulse w-2/3"></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -224,12 +337,23 @@ const VoiceLibrary = () => {
       ) : (
         <div className="text-center py-12">
           <Mic className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-          {searchTerm ? (
+          {searchTerm || languageFilter !== "all" || categoryFilter !== "all" ? (
             <>
-              <p className="text-muted-foreground">No voices found matching "{searchTerm}".</p>
+              <p className="text-muted-foreground">No voices found matching your filters.</p>
               <p className="text-sm text-muted-foreground mt-2">
-                Try adjusting your search terms.
+                Try adjusting your search terms or filters.
               </p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => {
+                  setSearchTerm("");
+                  setLanguageFilter("all");
+                  setCategoryFilter("all");
+                }}
+              >
+                Clear Filters
+              </Button>
             </>
           ) : (
             <>

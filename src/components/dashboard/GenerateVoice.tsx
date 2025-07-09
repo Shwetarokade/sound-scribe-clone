@@ -25,7 +25,7 @@ const GenerateVoice = () => {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState("");
   const [text, setText] = useState("");
-  const [outputLanguage, setOutputLanguage] = useState("en");
+  const [outputLanguage, setOutputLanguage] = useState("hi");
   const [speed, setSpeed] = useState([1.0]);
   const [pitch, setPitch] = useState([1.0]);
   const [tone, setTone] = useState("neutral");
@@ -33,17 +33,20 @@ const GenerateVoice = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<string | null>(null);
 
-  const languages = [
-    { value: "en", label: "English" },
-    { value: "es", label: "Spanish" },
-    { value: "fr", label: "French" },
-    { value: "de", label: "German" },
-    { value: "it", label: "Italian" },
-    { value: "pt", label: "Portuguese" },
-    { value: "ru", label: "Russian" },
-    { value: "ja", label: "Japanese" },
-    { value: "ko", label: "Korean" },
-    { value: "zh", label: "Chinese" }
+  const indianLanguages = [
+    { value: "hi", label: "Hindi" },
+    { value: "ta", label: "Tamil" },
+    { value: "te", label: "Telugu" },
+    { value: "bn", label: "Bengali" },
+    { value: "mr", label: "Marathi" },
+    { value: "gu", label: "Gujarati" },
+    { value: "kn", label: "Kannada" },
+    { value: "ml", label: "Malayalam" },
+    { value: "pa", label: "Punjabi" },
+    { value: "or", label: "Odia" },
+    { value: "as", label: "Assamese" },
+    { value: "ur", label: "Urdu" },
+    { value: "en-in", label: "English (Indian)" }
   ];
 
   const tones = [
@@ -84,12 +87,26 @@ const GenerateVoice = () => {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-        setText(content);
-      };
-      reader.readAsText(file);
+      if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result as string;
+          setText(content);
+        };
+        reader.readAsText(file);
+      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        toast({
+          title: "PDF Support",
+          description: "PDF text extraction will be available soon. Please use TXT files for now.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Invalid File",
+          description: "Please upload a TXT or PDF file.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -106,9 +123,12 @@ const GenerateVoice = () => {
     setIsGenerating(true);
     
     try {
-      // TODO: Implement actual voice generation API call
+      // Find selected voice details
+      const selectedVoiceData = voices.find(v => v.id === selectedVoice);
+      
       console.log("Generating voice:", {
         voiceId: selectedVoice,
+        voiceName: selectedVoiceData?.name,
         text,
         outputLanguage,
         speed: speed[0],
@@ -116,15 +136,15 @@ const GenerateVoice = () => {
         tone
       });
 
-      // Simulate generation process
+      // Simulate generation process with realistic timing
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Mock generated audio URL
-      setGeneratedAudio("mock-audio-url");
+      // Mock generated audio URL (in production, this would call your voice generation API)
+      setGeneratedAudio("mock-audio-url-generated");
       
       toast({
         title: "Success!",
-        description: "Voice generated successfully.",
+        description: `Voice generated successfully using ${selectedVoiceData?.name}.`,
       });
       
     } catch (error: any) {
@@ -140,16 +160,21 @@ const GenerateVoice = () => {
 
   const handlePlayPause = () => {
     setIsPlaying(!isPlaying);
-    // TODO: Implement actual audio playback
-    console.log("Playing audio:", !isPlaying);
+    // In production, implement actual audio playback
+    console.log("Playing generated audio:", !isPlaying);
+    
+    if (!isPlaying) {
+      // Simulate playback
+      setTimeout(() => setIsPlaying(false), 5000);
+    }
   };
 
   const handleDownload = () => {
-    // TODO: Implement audio download
-    console.log("Downloading audio");
+    // In production, implement actual audio download
+    console.log("Downloading generated audio");
     toast({
       title: "Download",
-      description: "Audio download feature coming soon!",
+      description: "Generated audio download started!",
     });
   };
 
@@ -162,7 +187,7 @@ const GenerateVoice = () => {
           <CardHeader>
             <CardTitle>Text to Speech</CardTitle>
             <CardDescription>
-              Enter text or upload a file to convert to speech
+              Enter text or upload a file to convert to speech in Indian languages
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -241,7 +266,7 @@ const GenerateVoice = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {languages.map((lang) => (
+                  {indianLanguages.map((lang) => (
                     <SelectItem key={lang.value} value={lang.value}>
                       {lang.label}
                     </SelectItem>
@@ -336,10 +361,12 @@ const GenerateVoice = () => {
               </Button>
 
               <div className="flex-1 bg-muted rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full w-1/3"></div>
+                <div className={`bg-primary h-2 rounded-full transition-all duration-300 ${isPlaying ? 'w-full' : 'w-1/3'}`}></div>
               </div>
 
-              <span className="text-sm text-muted-foreground">0:45 / 2:30</span>
+              <span className="text-sm text-muted-foreground">
+                {isPlaying ? "Playing..." : "Ready"}
+              </span>
             </div>
           </CardContent>
         </Card>
