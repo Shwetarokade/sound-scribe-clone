@@ -4,16 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Mic, LogOut, User } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import AddVoice from "@/components/dashboard/AddVoice";
 import GenerateVoice from "@/components/dashboard/GenerateVoice";
 import VoiceLibrary from "@/components/dashboard/VoiceLibrary";
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("library");
+  const { user, signOut } = useAuth();
 
-  const handleLogout = () => {
-    // TODO: Implement Supabase logout
-    console.log("Logout clicked");
+  const handleLogout = async () => {
+    await signOut();
   };
 
   return (
@@ -29,7 +30,9 @@ const Dashboard = () => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <User className="h-4 w-4" />
-              <span className="text-sm text-muted-foreground">Welcome back!</span>
+              <span className="text-sm text-muted-foreground">
+                {user?.email || 'Welcome back!'}
+              </span>
             </div>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-2" />

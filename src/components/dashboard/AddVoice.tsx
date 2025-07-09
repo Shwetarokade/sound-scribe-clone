@@ -1,57 +1,261 @@
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, Mic, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Upload, Mic, X, Play, Pause, Save, Scissors } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+
+interface VoiceForm {
+  name: string;
+  language: string;
+  category: string;
+  description: string;
+}
 
 const AddVoice = () => {
-  const [voiceName, setVoiceName] = useState("");
-  const [voiceDescription, setVoiceDescription] = useState("");
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [voiceForm, setVoiceForm] = useState<VoiceForm>({
+    name: "",
+    language: "",
+    category: "",
+    description: ""
+  });
+  
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string>("");
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [trimRange, setTrimRange] = useState([0, 15]);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const languages = [
+    { value: "en", label: "English" },
+    { value: "es", label: "Spanish" },
+    { value: "fr", label: "French" },
+    { value: "de", label: "German" },
+    { value: "it", label: "Italian" },
+    { value: "pt", label: "Portuguese" },
+    { value: "ru", label: "Russian" },
+    { value: "ja", label: "Japanese" },
+    { value: "ko", label: "Korean" },
+    { value: "zh", label: "Chinese" }
+  ];
+
+  const categories = [
+    { value: "male", label: "Male" },
+    { value: "female", label: "Female" },
+    { value: "teen_male", label: "Teen Male" },
+    { value: "teen_female", label: "Teen Female" },
+    { value: "child", label: "Child" },
+    { value: "elderly_male", label: "Elderly Male" },
+    { value: "elderly_female", label: "Elderly Female" }
+  ];
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    setUploadedFiles(prev => [...prev, ...files]);
+    const file = event.target.files?.[0];
+    if (file) {
+      setAudioFile(file);
+      const url = URL.createObjectURL(file);
+      setAudioUrl(url);
+      
+      // Get audio duration
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        setAudioDuration(audio.duration);
+        setTrimRange([0, Math.min(15, audio.duration)]);
+      });
+    }
   };
 
-  const removeFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+
+      recorder.ondataavailable = (event) => {
+        chunks.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/wav' });
+        const file = new File([blob], 'recording.wav', { type: 'audio/wav' });
+        setAudioFile(file);
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+        
+        // Get audio duration
+        const audio = new Audio(url);
+        audio.addEventListener('loadedmetadata', () => {
+          setAudioDuration(audio.duration);
+          setTrimRange([0, Math.min(15, audio.duration)]);
+        });
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (error) {
+      toast({
+        title: "Recording Error",
+        description: "Could not access microphone. Please check permissions.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    // TODO: Implement actual recording functionality
-    console.log("Recording:", !isRecording);
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+      setMediaRecorder(null);
+      setIsRecording(false);
+    }
+  };
+
+  const togglePlayback = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.currentTime = trimRange[0];
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleAudioTimeUpdate = () => {
+    if (audioRef.current && audioRef.current.currentTime >= trimRange[1]) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const trimAudio = async (file: File, startTime: number, endTime: number): Promise<Blob> => {
+    // This is a simplified version. In a real app, you'd use a library like ffmpeg.wasm
+    // For now, we'll return the original file
+    return file;
+  };
+
+  const uploadToSupabase = async (file: File, fileName: string): Promise<string> => {
+    if (!user) throw new Error("User not authenticated");
+
+    const filePath = `${user.id}/${fileName}`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from('voices')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from('voices')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!audioFile || !user) {
+      toast({
+        title: "Error",
+        description: "Please select an audio file and ensure you're logged in.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!voiceForm.name || !voiceForm.language || !voiceForm.category) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
 
-    // TODO: Implement voice training with uploaded files
-    console.log("Training voice:", {
-      name: voiceName,
-      description: voiceDescription,
-      files: uploadedFiles
-    });
+    try {
+      // Trim audio (simplified for now)
+      const trimmedBlob = await trimAudio(audioFile, trimRange[0], trimRange[1]);
+      const trimmedFile = new File([trimmedBlob], `${voiceForm.name}_trimmed.wav`, { type: 'audio/wav' });
 
-    // Simulate training process
-    setTimeout(() => {
-      setLoading(false);
+      // Upload to Supabase Storage
+      const fileName = `${Date.now()}_${voiceForm.name.replace(/\s+/g, '_')}.wav`;
+      const audioUrl = await uploadToSupabase(trimmedFile, fileName);
+
+      // Save to database
+      const { error: dbError } = await supabase
+        .from('voices')
+        .insert({
+          user_id: user.id,
+          name: voiceForm.name,
+          language: voiceForm.language,
+          category: voiceForm.category,
+          description: voiceForm.description,
+          audio_url: audioUrl,
+          duration: trimRange[1] - trimRange[0]
+        });
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      toast({
+        title: "Success!",
+        description: "Voice has been added to your library.",
+      });
+
       // Reset form
-      setVoiceName("");
-      setVoiceDescription("");
-      setUploadedFiles([]);
-    }, 3000);
+      setVoiceForm({ name: "", language: "", category: "", description: "" });
+      setAudioFile(null);
+      setAudioUrl("");
+      setTrimRange([0, 15]);
+      setAudioDuration(0);
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add voice. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeFile = () => {
+    setAudioFile(null);
+    setAudioUrl("");
+    setTrimRange([0, 15]);
+    setAudioDuration(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <Card>
         <CardHeader>
           <CardTitle>Add New Voice</CardTitle>
@@ -61,63 +265,38 @@ const AddVoice = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Voice Details */}
+            {/* Audio Upload/Recording */}
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="voiceName">Voice Name</Label>
-                <Input
-                  id="voiceName"
-                  placeholder="e.g., Professional Speaker"
-                  value={voiceName}
-                  onChange={(e) => setVoiceName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="voiceDescription">Description</Label>
-                <Textarea
-                  id="voiceDescription"
-                  placeholder="Describe the voice characteristics and intended use..."
-                  value={voiceDescription}
-                  onChange={(e) => setVoiceDescription(e.target.value)}
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            {/* Audio Upload */}
-            <div className="space-y-4">
-              <Label>Audio Samples</Label>
+              <Label>Audio File</Label>
               <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6">
                 <div className="text-center space-y-4">
                   <Upload className="h-12 w-12 text-muted-foreground mx-auto" />
                   <div>
-                    <p className="text-sm font-medium">Upload audio files</p>
+                    <p className="text-sm font-medium">Upload or record audio</p>
                     <p className="text-xs text-muted-foreground">
-                      MP3, WAV, or M4A files up to 10MB each
+                      MP3, WAV files up to 10MB
                     </p>
                   </div>
                   <div className="flex items-center justify-center space-x-4">
                     <label className="cursor-pointer">
                       <input
+                        ref={fileInputRef}
                         type="file"
-                        multiple
                         accept="audio/*"
                         onChange={handleFileUpload}
                         className="hidden"
                       />
                       <Button type="button" variant="outline">
                         <Upload className="h-4 w-4 mr-2" />
-                        Choose Files
+                        Choose File
                       </Button>
                     </label>
                     <span className="text-xs text-muted-foreground">or</span>
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={toggleRecording}
-                      className={isRecording ? "bg-red-100 border-red-300" : ""}
+                      onClick={isRecording ? stopRecording : startRecording}
+                      className={isRecording ? "bg-red-100 border-red-300 dark:bg-red-900/20" : ""}
                     >
                       <Mic className="h-4 w-4 mr-2" />
                       {isRecording ? "Stop Recording" : "Record Voice"}
@@ -126,46 +305,149 @@ const AddVoice = () => {
                 </div>
               </div>
 
-              {/* Uploaded Files */}
-              {uploadedFiles.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Uploaded Files ({uploadedFiles.length})</Label>
-                  <div className="space-y-2">
-                    {uploadedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                        <span className="text-sm font-medium">{file.name}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFile(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+              {/* Audio Player and Trimmer */}
+              {audioUrl && (
+                <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">
+                      {audioFile?.name || 'Recorded Audio'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={removeFile}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  <audio
+                    ref={audioRef}
+                    src={audioUrl}
+                    onTimeUpdate={handleAudioTimeUpdate}
+                    onEnded={() => setIsPlaying(false)}
+                    className="hidden"
+                  />
+                  
+                  <div className="flex items-center space-x-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={togglePlayback}
+                    >
+                      {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                    <div className="flex-1">
+                      <Label className="text-xs text-muted-foreground mb-2 block">
+                        Trim to 15 seconds (Current: {trimRange[0].toFixed(1)}s - {trimRange[1].toFixed(1)}s)
+                      </Label>
+                      <Slider
+                        value={trimRange}
+                        onValueChange={setTrimRange}
+                        max={audioDuration}
+                        min={0}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                    <Scissors className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Voice Details Form */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="voiceName">Voice Name *</Label>
+                <Input
+                  id="voiceName"
+                  placeholder="e.g., Professional Speaker"
+                  value={voiceForm.name}
+                  onChange={(e) => setVoiceForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="language">Language *</Label>
+                <Select
+                  value={voiceForm.language}
+                  onValueChange={(value) => setVoiceForm(prev => ({ ...prev, language: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.value} value={lang.value}>
+                        {lang.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Voice Category *</Label>
+                <Select
+                  value={voiceForm.category}
+                  onValueChange={(value) => setVoiceForm(prev => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Describe the voice characteristics and intended use..."
+                  value={voiceForm.description}
+                  onChange={(e) => setVoiceForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                />
+              </div>
             </div>
 
             {/* Training Tips */}
             <div className="bg-muted/50 p-4 rounded-lg">
               <h4 className="font-medium mb-2">Tips for better voice training:</h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• Upload 5-10 high-quality audio samples</li>
-                <li>• Each sample should be 10-30 seconds long</li>
-                <li>• Use clear, noise-free recordings</li>
-                <li>• Include varied emotions and speaking styles</li>
+                <li>• Use high-quality, clear audio recordings</li>
+                <li>• 15-second clips work best for voice cloning</li>
+                <li>• Avoid background noise and echo</li>
+                <li>• Speak naturally with consistent volume</li>
               </ul>
             </div>
 
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={loading || uploadedFiles.length === 0 || !voiceName}
+              disabled={loading || !audioFile || !voiceForm.name || !voiceForm.language || !voiceForm.category}
             >
-              {loading ? "Training Voice..." : "Start Training"}
+              {loading ? (
+                <>
+                  <Save className="h-4 w-4 mr-2 animate-spin" />
+                  Processing Voice...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Add Voice to Library
+                </>
+              )}
             </Button>
           </form>
         </CardContent>
