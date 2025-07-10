@@ -26,6 +26,7 @@ const AddVoice = () => {
   const [showForm, setShowForm] = useState(false);
 
   const handleAudioReady = (audioFile: File, trimStart: number, trimEnd: number) => {
+    console.log('Audio ready:', { fileName: audioFile.name, trimStart, trimEnd });
     setAudioData({ file: audioFile, trimStart, trimEnd });
     setShowForm(true);
     
@@ -39,20 +40,96 @@ const AddVoice = () => {
   };
 
   const handleClear = () => {
+    console.log('Clearing audio data and form');
     setAudioData(null);
     setShowForm(false);
+  };
+
+  // Create a trimmed audio file
+  const createTrimmedAudio = async (file: File, trimStart: number, trimEnd: number): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      audio.onload = async () => {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          const sampleRate = audioBuffer.sampleRate;
+          const startFrame = Math.floor(trimStart * sampleRate);
+          const endFrame = Math.floor(trimEnd * sampleRate);
+          const frameCount = endFrame - startFrame;
+          
+          const trimmedBuffer = audioContext.createBuffer(
+            audioBuffer.numberOfChannels,
+            frameCount,
+            sampleRate
+          );
+          
+          for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+            const originalData = audioBuffer.getChannelData(channel);
+            const trimmedData = trimmedBuffer.getChannelData(channel);
+            
+            for (let i = 0; i < frameCount; i++) {
+              trimmedData[i] = originalData[startFrame + i];
+            }
+          }
+          
+          // Convert back to blob
+          const length = trimmedBuffer.length * trimmedBuffer.numberOfChannels * 2;
+          const arrayBuffer2 = new ArrayBuffer(length);
+          const view = new DataView(arrayBuffer2);
+          
+          let offset = 0;
+          for (let i = 0; i < trimmedBuffer.length; i++) {
+            for (let channel = 0; channel < trimmedBuffer.numberOfChannels; channel++) {
+              const sample = Math.max(-1, Math.min(1, trimmedBuffer.getChannelData(channel)[i]));
+              view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+              offset += 2;
+            }
+          }
+          
+          const blob = new Blob([arrayBuffer2], { type: 'audio/wav' });
+          const trimmedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '_trimmed.wav'), { 
+            type: 'audio/wav' 
+          });
+          
+          resolve(trimmedFile);
+        } catch (error) {
+          console.error('Audio trimming error:', error);
+          // Fallback: return original file
+          resolve(file);
+        }
+      };
+      
+      audio.onerror = () => {
+        console.error('Audio loading error, using original file');
+        // Fallback: return original file
+        resolve(file);
+      };
+      
+      const url = URL.createObjectURL(file);
+      audio.src = url;
+    });
   };
 
   const uploadToSupabase = async (file: File, fileName: string): Promise<string> => {
     if (!user) throw new Error("User not authenticated");
 
+    console.log('Uploading to Supabase:', { fileName, fileSize: file.size });
+    
     const filePath = `${user.id}/${fileName}`;
     
     const { error: uploadError } = await supabase.storage
       .from('voices')
-      .upload(filePath, file);
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
 
     if (uploadError) {
+      console.error('Upload error:', uploadError);
       throw uploadError;
     }
 
@@ -60,6 +137,7 @@ const AddVoice = () => {
       .from('voices')
       .getPublicUrl(filePath);
 
+    console.log('Upload successful, public URL:', data.publicUrl);
     return data.publicUrl;
   };
 
@@ -73,12 +151,28 @@ const AddVoice = () => {
       return;
     }
 
+    console.log('Form submission started:', formData);
     setLoading(true);
 
     try {
-      // Create trimmed file name
-      const fileName = `${Date.now()}_${formData.name.replace(/\s+/g, '_')}.${audioData.file.name.split('.').pop()}`;
-      const audioUrl = await uploadToSupabase(audioData.file, fileName);
+      // Create trimmed audio file
+      const trimmedFile = await createTrimmedAudio(
+        audioData.file, 
+        audioData.trimStart, 
+        audioData.trimEnd
+      );
+      
+      console.log('Trimmed file created:', { 
+        originalSize: audioData.file.size, 
+        trimmedSize: trimmedFile.size 
+      });
+
+      // Create unique file name
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${formData.name.replace(/\s+/g, '_')}.${trimmedFile.name.split('.').pop()}`;
+      
+      // Upload to Supabase Storage
+      const audioUrl = await uploadToSupabase(trimmedFile, fileName);
 
       // Save to database
       const { error: dbError } = await supabase
@@ -88,18 +182,21 @@ const AddVoice = () => {
           name: formData.name,
           language: formData.language,
           category: formData.category,
-          description: formData.description,
+          description: formData.description || null,
           audio_url: audioUrl,
-          duration: audioData.trimEnd - audioData.trimStart
+          duration: Math.round(audioData.trimEnd - audioData.trimStart)
         });
 
       if (dbError) {
+        console.error('Database error:', dbError);
         throw dbError;
       }
 
+      console.log('Voice saved successfully');
+      
       toast({
         title: "Success!",
-        description: "Voice has been added to your library and is now available for generation.",
+        description: `Voice "${formData.name}" has been added to your library and is now available for generation.`,
       });
 
       // Reset form and state
@@ -107,6 +204,7 @@ const AddVoice = () => {
       setShowForm(false);
       
     } catch (error: any) {
+      console.error('Form submission error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to add voice. Please try again.",

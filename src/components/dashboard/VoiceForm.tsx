@@ -52,7 +52,9 @@ const VoiceForm = ({ onSubmit, loading = false }: VoiceFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    if (formData.name && formData.language && formData.category) {
+      onSubmit(formData);
+    }
   };
 
   const updateFormData = (field: keyof VoiceFormData, value: string) => {

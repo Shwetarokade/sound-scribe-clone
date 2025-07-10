@@ -19,6 +19,7 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [trimRegion, setTrimRegion] = useState<{ start: number; end: number } | null>(null);
+  const [duration, setDuration] = useState(0);
   
   const waveformRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -26,9 +27,31 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
   const regionsPluginRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (waveformRef.current && !wavesurferRef.current) {
+  // Cleanup function to destroy WaveSurfer instance
+  const destroyWaveSurfer = () => {
+    if (wavesurferRef.current) {
+      try {
+        wavesurferRef.current.destroy();
+      } catch (error) {
+        console.log('WaveSurfer destroy error (non-critical):', error);
+      }
+      wavesurferRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  };
+
+  // Initialize WaveSurfer
+  const initializeWaveSurfer = () => {
+    if (!waveformRef.current) return;
+
+    destroyWaveSurfer();
+
+    try {
       // Initialize regions plugin
       regionsPluginRef.current = RegionsPlugin.create();
       
@@ -58,6 +81,11 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
       wavesurferRef.current.on('play', () => setIsPlaying(true));
       wavesurferRef.current.on('pause', () => setIsPlaying(false));
       wavesurferRef.current.on('finish', () => setIsPlaying(false));
+      wavesurferRef.current.on('ready', () => {
+        const newDuration = wavesurferRef.current?.getDuration() || 0;
+        setDuration(newDuration);
+        createTrimRegion(newDuration);
+      });
 
       // Record plugin events
       recordPluginRef.current.on('record-start', () => {
@@ -76,27 +104,31 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
         
         const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
         setAudioFile(file);
-        
-        // Auto-create a 15-second region
-        setTimeout(() => {
-          createTrimRegion();
-        }, 500);
       });
 
       // Regions events
       regionsPluginRef.current.on('region-updated', (region: any) => {
         setTrimRegion({ start: region.start, end: region.end });
       });
+
+    } catch (error) {
+      console.error('WaveSurfer initialization error:', error);
+      toast({
+        title: "Audio Error",
+        description: "Failed to initialize audio recorder. Please refresh and try again.",
+        variant: "destructive"
+      });
     }
+  };
+
+  useEffect(() => {
+    initializeWaveSurfer();
 
     return () => {
-      if (wavesurferRef.current) {
-        wavesurferRef.current.destroy();
-        wavesurferRef.current = null;
-      }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
       }
+      destroyWaveSurfer();
     };
   }, []);
 
@@ -142,35 +174,44 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
         return;
       }
 
+      // Clear previous state
+      clearAudio();
+      
       setAudioFile(file);
+      
+      // Clean up previous URL
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+      
       const url = URL.createObjectURL(file);
+      audioUrlRef.current = url;
       
       if (wavesurferRef.current) {
         wavesurferRef.current.load(url);
-        wavesurferRef.current.on('ready', () => {
-          createTrimRegion();
-        });
       }
     }
   };
 
-  const createTrimRegion = () => {
+  const createTrimRegion = (audioDuration?: number) => {
     if (wavesurferRef.current && regionsPluginRef.current) {
       // Clear existing regions
       regionsPluginRef.current.clearRegions();
       
-      const duration = wavesurferRef.current.getDuration();
-      const regionEnd = Math.min(15, duration);
+      const totalDuration = audioDuration || wavesurferRef.current.getDuration();
+      const regionEnd = Math.min(15, totalDuration);
       
-      const region = regionsPluginRef.current.addRegion({
-        start: 0,
-        end: regionEnd,
-        color: 'hsla(var(--primary) / 0.2)',
-        resize: true,
-        drag: true
-      });
-      
-      setTrimRegion({ start: 0, end: regionEnd });
+      if (totalDuration > 0) {
+        const region = regionsPluginRef.current.addRegion({
+          start: 0,
+          end: regionEnd,
+          color: 'hsla(var(--primary) / 0.2)',
+          resize: true,
+          drag: true
+        });
+        
+        setTrimRegion({ start: 0, end: regionEnd });
+      }
     }
   };
 
@@ -191,6 +232,7 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
     setTrimRegion(null);
     setIsPlaying(false);
     setRecordingTime(0);
+    setDuration(0);
     
     if (wavesurferRef.current) {
       wavesurferRef.current.empty();
@@ -202,6 +244,11 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
     
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+    
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
     }
     
     onClear();
@@ -276,9 +323,10 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
                 
                 <div className="text-sm text-muted-foreground">
                   {audioFile.name}
-                  {trimRegion && (
+                  {trimRegion && duration > 0 && (
                     <span className="ml-2 text-primary">
-                      ({trimRegion.start.toFixed(1)}s - {trimRegion.end.toFixed(1)}s)
+                      Trim: {trimRegion.start.toFixed(1)}s - {trimRegion.end.toFixed(1)}s 
+                      ({(trimRegion.end - trimRegion.start).toFixed(1)}s selected)
                     </span>
                   )}
                 </div>
@@ -292,7 +340,7 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
                   className="transition-all duration-200 hover:scale-105"
                 >
                   <Scissors className="h-4 w-4 mr-2" />
-                  Use Trimmed Audio
+                  Use Selected Audio
                 </Button>
                 
                 <Button
@@ -310,8 +358,8 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
           {/* Instructions */}
           <div className="mt-4 p-3 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground">
-              💡 <strong>Tips:</strong> Drag the highlighted region to select your desired 15-second clip. 
-              You can resize and move the selection area on the waveform.
+              💡 <strong>Tips:</strong> Drag the highlighted region to select your desired clip (up to 15 seconds). 
+              You can resize and move the selection area on the waveform. The selected audio will be used for voice cloning.
             </p>
           </div>
         </CardContent>
