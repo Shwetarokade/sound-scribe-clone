@@ -40,7 +40,6 @@ const WaveformRecorder = ({ onAudioReady, onClear }: WaveformRecorderProps) => {
         cursorColor: 'hsl(var(--primary))',
         barWidth: 2,
         barRadius: 1,
-        responsive: true,
         height: 80,
         normalize: true,
         plugins: [regionsPluginRef.current],
