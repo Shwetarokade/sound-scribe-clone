@@ -83,22 +83,22 @@ const GenerateVoice = () => {
         setVoices(voicesData || []);
       }
 
-      // Fetch recent generations
-      const { data: generationsData, error: generationsError } = await supabase
-        .from('generated_voices')
-        .select(`
-          *,
-          voices:voice_id (name, category)
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
+      // Fetch recent generations (temporarily disabled until migration is run)
+      // const { data: generationsData, error: generationsError } = await supabase
+      //   .from('generated_voices')
+      //   .select(`
+      //     *,
+      //     voices:voice_id (name, category)
+      //   `)
+      //   .eq('user_id', user.id)
+      //   .order('created_at', { ascending: false })
+      //   .limit(5);
 
-      if (generationsError) {
-        console.error('Error fetching generations:', generationsError);
-      } else {
-        setRecentGenerations(generationsData || []);
-      }
+      // if (generationsError) {
+      //   console.error('Error fetching generations:', generationsError);
+      // } else {
+      //   setRecentGenerations(generationsData || []);
+      // }
     };
 
     fetchData();
@@ -198,35 +198,35 @@ const GenerateVoice = () => {
       const mockAudioUrl = "mock-audio-url-generated";
       setGeneratedAudio(mockAudioUrl);
 
-      // Save to generated_voices table
-      const { error: saveError } = await supabase
-        .from('generated_voices')
-        .insert({
-          user_id: user?.id,
-          input_text: textToGenerate,
-          voice_id: selectedVoice,
-          output_language: outputLanguage,
-          speed: speed[0],
-          pitch: pitch[0],
-          audio_url: mockAudioUrl
-        });
+      // Save to generated_voices table (temporarily disabled until migration is run)
+      // const { error: saveError } = await supabase
+      //   .from('generated_voices')
+      //   .insert({
+      //     user_id: user?.id,
+      //     input_text: textToGenerate,
+      //     voice_id: selectedVoice,
+      //     output_language: outputLanguage,
+      //     speed: speed[0],
+      //     pitch: pitch[0],
+      //     audio_url: mockAudioUrl
+      //   });
 
-      if (saveError) {
-        console.error('Error saving generation:', saveError);
-      } else {
-        // Refresh recent generations
-        const { data: generationsData } = await supabase
-          .from('generated_voices')
-          .select(`
-            *,
-            voices:voice_id (name, category)
-          `)
-          .eq('user_id', user?.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        
-        setRecentGenerations(generationsData || []);
-      }
+      // if (saveError) {
+      //   console.error('Error saving generation:', saveError);
+      // } else {
+      //   // Refresh recent generations
+      //   const { data: generationsData } = await supabase
+      //     .from('generated_voices')
+      //     .select(`
+      //       *,
+      //       voices:voice_id (name, category)
+      //     `)
+      //     .eq('user_id', user?.id)
+      //     .order('created_at', { ascending: false })
+      //     .limit(5);
+      //   
+      //   setRecentGenerations(generationsData || []);
+      // }
       
       toast({
         title: "Success!",
