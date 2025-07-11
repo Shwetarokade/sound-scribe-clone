@@ -32,6 +32,8 @@ const GenerateVoice = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<string | null>(null);
+  const [transliteratedText, setTransliteratedText] = useState("");
+  const [recentGenerations, setRecentGenerations] = useState<any[]>([]);
 
   const indianLanguages = [
     { value: "hi", label: "Hindi" },
@@ -58,31 +60,81 @@ const GenerateVoice = () => {
     { value: "cheerful", label: "Cheerful" }
   ];
 
-  // Fetch user's voices from Supabase
+  // Fetch user's voices and recent generations from Supabase
   useEffect(() => {
-    const fetchVoices = async () => {
+    const fetchData = async () => {
       if (!user) return;
 
-      const { data, error } = await supabase
+      // Fetch voices
+      const { data: voicesData, error: voicesError } = await supabase
         .from('voices')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching voices:', error);
+      if (voicesError) {
+        console.error('Error fetching voices:', voicesError);
         toast({
           title: "Error",
           description: "Failed to load your voices.",
           variant: "destructive"
         });
       } else {
-        setVoices(data || []);
+        setVoices(voicesData || []);
+      }
+
+      // Fetch recent generations
+      const { data: generationsData, error: generationsError } = await supabase
+        .from('generated_voices')
+        .select(`
+          *,
+          voices:voice_id (name, category)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (generationsError) {
+        console.error('Error fetching generations:', generationsError);
+      } else {
+        setRecentGenerations(generationsData || []);
       }
     };
 
-    fetchVoices();
+    fetchData();
   }, [user, toast]);
+
+  // Real-time transliteration
+  useEffect(() => {
+    const transliterate = async (text: string) => {
+      if (!text.trim()) {
+        setTransliteratedText("");
+        return;
+      }
+      
+      // Simple mock transliteration - in production, use proper transliteration API
+      const mockTransliterate = (input: string) => {
+        const transliterationMap: { [key: string]: string } = {
+          'a': 'अ', 'b': 'ब', 'c': 'च', 'd': 'द', 'e': 'ए', 'f': 'फ',
+          'g': 'ग', 'h': 'ह', 'i': 'इ', 'j': 'ज', 'k': 'क', 'l': 'ल',
+          'm': 'म', 'n': 'न', 'o': 'ओ', 'p': 'प', 'q': 'क', 'r': 'र',
+          's': 'स', 't': 'त', 'u': 'उ', 'v': 'व', 'w': 'व', 'x': 'क्स',
+          'y': 'य', 'z': 'ज़', ' ': ' '
+        };
+        
+        return input.toLowerCase().split('').map(char => 
+          transliterationMap[char] || char
+        ).join('');
+      };
+      
+      // Simulate API delay
+      setTimeout(() => {
+        setTransliteratedText(mockTransliterate(text));
+      }, 100);
+    };
+
+    transliterate(text);
+  }, [text, outputLanguage]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -95,6 +147,7 @@ const GenerateVoice = () => {
         };
         reader.readAsText(file);
       } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        // Basic PDF text extraction using pdfjs-dist would go here
         toast({
           title: "PDF Support",
           description: "PDF text extraction will be available soon. Please use TXT files for now.",
@@ -129,18 +182,51 @@ const GenerateVoice = () => {
       console.log("Generating voice:", {
         voiceId: selectedVoice,
         voiceName: selectedVoiceData?.name,
-        text,
+        text: transliteratedText || text,
         outputLanguage,
         speed: speed[0],
-        pitch: pitch[0],
-        tone
+        pitch: pitch[0]
       });
+
+      // Use transliterated text for generation
+      const textToGenerate = transliteratedText || text;
 
       // Simulate generation process with realistic timing
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       // Mock generated audio URL (in production, this would call your voice generation API)
-      setGeneratedAudio("mock-audio-url-generated");
+      const mockAudioUrl = "mock-audio-url-generated";
+      setGeneratedAudio(mockAudioUrl);
+
+      // Save to generated_voices table
+      const { error: saveError } = await supabase
+        .from('generated_voices')
+        .insert({
+          user_id: user?.id,
+          input_text: textToGenerate,
+          voice_id: selectedVoice,
+          output_language: outputLanguage,
+          speed: speed[0],
+          pitch: pitch[0],
+          audio_url: mockAudioUrl
+        });
+
+      if (saveError) {
+        console.error('Error saving generation:', saveError);
+      } else {
+        // Refresh recent generations
+        const { data: generationsData } = await supabase
+          .from('generated_voices')
+          .select(`
+            *,
+            voices:voice_id (name, category)
+          `)
+          .eq('user_id', user?.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        setRecentGenerations(generationsData || []);
+      }
       
       toast({
         title: "Success!",
@@ -221,6 +307,19 @@ const GenerateVoice = () => {
                 {text.length} characters
               </div>
             </div>
+
+            {/* Transliteration Panel */}
+            {text.trim() && (
+              <div className="space-y-2 mt-4 p-3 bg-muted/50 rounded-lg">
+                <Label className="text-sm font-semibold">Transliterated Output</Label>
+                <div className="text-sm text-muted-foreground min-h-[60px] p-2 bg-background rounded border">
+                  {transliteratedText || "Transliterating..."}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This transliterated text will be used for voice generation
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -381,11 +480,34 @@ const GenerateVoice = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No recent generations yet.</p>
-            <p className="text-sm mt-1">Generated audio will appear here.</p>
-          </div>
+          {recentGenerations.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No recent generations yet.</p>
+              <p className="text-sm mt-1">Generated audio will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentGenerations.map((generation) => (
+                <div key={generation.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium truncate">{generation.input_text.substring(0, 50)}...</p>
+                    <p className="text-xs text-muted-foreground">
+                      {generation.voices?.name} • {generation.output_language.toUpperCase()} • {new Date(generation.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button size="sm" variant="outline">
+                      <Play className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="outline">
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
