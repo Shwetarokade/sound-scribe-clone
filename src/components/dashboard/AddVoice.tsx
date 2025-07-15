@@ -11,7 +11,7 @@ import VoiceForm from "./VoiceForm";
 interface VoiceFormData {
   name: string;
   language: string;
-  category: string;
+  voice_type: string;
   description: string;
 }
 
@@ -19,6 +19,8 @@ const AddVoice = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [cachedVoices, setCachedVoices] = useState<any[]>([]);
+  const [retryAttempts, setRetryAttempts] = useState(0);
   const [audioData, setAudioData] = useState<{
     file: File;
     trimStart: number;
@@ -382,7 +384,7 @@ const AddVoice = () => {
           user_id: user.id,
           name: formData.name,
           language: formData.language,
-          category: formData.category,
+          voice_type: formData.voice_type,
           description: formData.description || null,
           audio_url: audioUrl,
           duration: Math.round(audioData.trimEnd - audioData.trimStart)
@@ -390,13 +392,64 @@ const AddVoice = () => {
 
       if (dbError) {
         console.error('Database error:', dbError);
-        throw dbError;
+        
+        // Cache data locally for retry
+        const voiceData = {
+          user_id: user.id,
+          name: formData.name,
+          language: formData.language,
+          voice_type: formData.voice_type,
+          description: formData.description || null,
+          audio_url: audioUrl,
+          duration: Math.round(audioData.trimEnd - audioData.trimStart)
+        };
+        
+        toast({
+          title: "Voice cached locally",
+          description: "Will retry uploading in background every 3 seconds.",
+        });
+        
+        // Start retry mechanism
+        let retryCount = 0;
+        const retryInterval = setInterval(async () => {
+          try {
+            const { error: retryError } = await supabase
+              .from('voices')
+              .insert(voiceData);
+              
+            if (!retryError) {
+              clearInterval(retryInterval);
+              toast({
+                title: "Voice added! ▶️",
+                description: "Voice uploaded successfully after retry.",
+              });
+            } else {
+              retryCount++;
+              if (retryCount >= 10) {
+                clearInterval(retryInterval);
+                toast({
+                  title: "Upload failed",
+                  description: "Please check your connection and try again.",
+                  variant: "destructive"
+                });
+              }
+            }
+          } catch (retryErr) {
+            console.error('Retry failed:', retryErr);
+            retryCount++;
+            if (retryCount >= 10) {
+              clearInterval(retryInterval);
+            }
+          }
+        }, 3000);
+        
+        return;
       }
 
       console.log('Voice saved successfully');
       
       toast({
-        title: "Success!",
+        title: "Voice added! ▶️",
         description: `Voice "${formData.name}" has been added to your library and is now available for generation.`,
       });
 

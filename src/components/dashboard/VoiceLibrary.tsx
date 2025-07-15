@@ -14,7 +14,7 @@ interface Voice {
   id: string;
   name: string;
   language: string;
-  category: string;
+  voice_type: string;
   description?: string;
   audio_url: string;
   duration?: number;
@@ -28,7 +28,7 @@ const VoiceLibrary = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [languageFilter, setLanguageFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [voiceTypeFilter, setVoiceTypeFilter] = useState("all");
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
@@ -49,15 +49,16 @@ const VoiceLibrary = () => {
     { value: "en-in", label: "English (Indian)" }
   ];
 
-  const categories = [
-    { value: "all", label: "All Categories" },
+  const voiceTypes = [
+    { value: "all", label: "All Voice Types" },
     { value: "conversational", label: "Conversational" },
     { value: "narrative", label: "Narrative" },
     { value: "ai", label: "AI" },
-    { value: "present", label: "Present" }
+    { value: "robotic", label: "Robotic" },
+    { value: "natural", label: "Natural" }
   ];
 
-  // Fetch voices from Supabase
+  // Fetch voices from Supabase with real-time updates
   useEffect(() => {
     const fetchVoices = async () => {
       if (!user) return;
@@ -83,30 +84,83 @@ const VoiceLibrary = () => {
     };
 
     fetchVoices();
+
+    // Set up real-time subscription for new voices
+    const channel = supabase
+      .channel('voices-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'voices',
+          filter: `user_id=eq.${user?.id}`
+        },
+        (payload) => {
+          console.log('New voice added:', payload.new);
+          const newVoice = payload.new as Voice;
+          
+          // Add new voice at the top with slide-in animation
+          setVoices(prev => [newVoice, ...prev]);
+          
+          // Show toast with play button
+          toast({
+            title: "Voice added! ▶️",
+            description: `${newVoice.name} is now in your library`,
+            action: (
+              <button
+                onClick={() => handlePlayPause(newVoice.id, newVoice.audio_url)}
+                className="bg-primary text-primary-foreground px-3 py-1 rounded text-sm hover:bg-primary/90"
+              >
+                ▶️ Play
+              </button>
+            ),
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user, toast]);
 
   const filteredVoices = voices.filter(voice => {
     const matchesSearch = voice.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       voice.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      voice.category.toLowerCase().includes(searchTerm.toLowerCase());
+      voice.voice_type.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesLanguage = languageFilter === "all" || voice.language === languageFilter;
-    const matchesCategory = categoryFilter === "all" || voice.category === categoryFilter;
+    const matchesVoiceType = voiceTypeFilter === "all" || voice.voice_type === voiceTypeFilter;
     
-    return matchesSearch && matchesLanguage && matchesCategory;
+    return matchesSearch && matchesLanguage && matchesVoiceType;
   });
 
   const handlePlayPause = (voiceId: string, audioUrl: string) => {
     if (playingVoice === voiceId) {
       setPlayingVoice(null);
-      // TODO: Implement actual audio pause
+      // Pause the audio
+      const audioElement = document.querySelector(`audio[data-voice-id="${voiceId}"]`) as HTMLAudioElement;
+      if (audioElement) {
+        audioElement.pause();
+      }
     } else {
       setPlayingVoice(voiceId);
-      // TODO: Implement actual audio playback
-      console.log("Playing voice:", voiceId, audioUrl);
       
-      // Simulate playback duration
-      setTimeout(() => setPlayingVoice(null), 3000);
+      // Create or get audio element
+      let audioElement = document.querySelector(`audio[data-voice-id="${voiceId}"]`) as HTMLAudioElement;
+      if (!audioElement) {
+        audioElement = document.createElement('audio');
+        audioElement.setAttribute('data-voice-id', voiceId);
+        audioElement.src = audioUrl;
+        audioElement.onended = () => setPlayingVoice(null);
+        document.body.appendChild(audioElement);
+      }
+      
+      audioElement.play().catch(error => {
+        console.error('Audio playback failed:', error);
+        setPlayingVoice(null);
+      });
     }
   };
 
@@ -180,12 +234,13 @@ const VoiceLibrary = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const getCategoryBadgeVariant = (category: string) => {
-    switch (category) {
+  const getVoiceTypeBadgeVariant = (voiceType: string) => {
+    switch (voiceType) {
       case 'conversational': return 'default';
       case 'narrative': return 'secondary';
       case 'ai': return 'outline';
-      case 'present': return 'destructive';
+      case 'robotic': return 'destructive';
+      case 'natural': return 'default';
       default: return 'default';
     }
   };
@@ -234,14 +289,14 @@ const VoiceLibrary = () => {
             </SelectContent>
           </Select>
 
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={voiceTypeFilter} onValueChange={setVoiceTypeFilter}>
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filter by category" />
+              <SelectValue placeholder="Filter by voice type" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat.value} value={cat.value}>
-                  {cat.label}
+              {voiceTypes.map((type) => (
+                <SelectItem key={type.value} value={type.value}>
+                  {type.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -252,8 +307,12 @@ const VoiceLibrary = () => {
       {/* Voice Cards */}
       {filteredVoices.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredVoices.map((voice) => (
-            <Card key={voice.id} className="hover:shadow-md transition-shadow">
+          {filteredVoices.map((voice, index) => (
+            <Card 
+              key={voice.id} 
+              className="hover:shadow-md transition-all duration-300 animate-fade-in" 
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="space-y-1 flex-1">
@@ -279,8 +338,8 @@ const VoiceLibrary = () => {
                       </CardDescription>
                     )}
                   </div>
-                  <Badge variant={getCategoryBadgeVariant(voice.category)}>
-                    {voice.category}
+                  <Badge variant={getVoiceTypeBadgeVariant(voice.voice_type)}>
+                    {voice.voice_type}
                   </Badge>
                 </div>
               </CardHeader>
@@ -299,6 +358,7 @@ const VoiceLibrary = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handlePlayPause(voice.id, voice.audio_url)}
+                      className={`min-w-[48px] min-h-[48px] ${playingVoice === voice.id ? 'bg-primary/20 border-primary' : ''}`}
                     >
                       {playingVoice === voice.id ? (
                         <Pause className="h-4 w-4" />
@@ -310,6 +370,7 @@ const VoiceLibrary = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleDownload(voice.audio_url, voice.name)}
+                      className="min-w-[48px] min-h-[48px]"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -317,6 +378,7 @@ const VoiceLibrary = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleDelete(voice.id, voice.audio_url)}
+                      className="min-w-[48px] min-h-[48px]"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -337,7 +399,7 @@ const VoiceLibrary = () => {
       ) : (
         <div className="text-center py-12">
           <Mic className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-          {searchTerm || languageFilter !== "all" || categoryFilter !== "all" ? (
+          {searchTerm || languageFilter !== "all" || voiceTypeFilter !== "all" ? (
             <>
               <p className="text-muted-foreground">No voices found matching your filters.</p>
               <p className="text-sm text-muted-foreground mt-2">
@@ -349,7 +411,7 @@ const VoiceLibrary = () => {
                 onClick={() => {
                   setSearchTerm("");
                   setLanguageFilter("all");
-                  setCategoryFilter("all");
+                  setVoiceTypeFilter("all");
                 }}
               >
                 Clear Filters

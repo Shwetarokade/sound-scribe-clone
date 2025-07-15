@@ -11,7 +11,7 @@ import { Save } from "lucide-react";
 interface VoiceFormData {
   name: string;
   language: string;
-  category: string;
+  voice_type: string;
   description: string;
 }
 
@@ -24,7 +24,7 @@ const VoiceForm = ({ onSubmit, loading = false }: VoiceFormProps) => {
   const [formData, setFormData] = useState<VoiceFormData>({
     name: "",
     language: "",
-    category: "",
+    voice_type: "",
     description: ""
   });
 
@@ -44,15 +44,17 @@ const VoiceForm = ({ onSubmit, loading = false }: VoiceFormProps) => {
     { value: "en-in", label: "English (Indian)" }
   ];
 
-  const categories = [
-    { value: "male", label: "Male" },
-    { value: "female", label: "Female" },
-    { value: "teen", label: "Teen" }
+  const voiceTypes = [
+    { value: "conversational", label: "Conversational" },
+    { value: "narrative", label: "Narrative" },
+    { value: "ai", label: "AI" },
+    { value: "robotic", label: "Robotic" },
+    { value: "natural", label: "Natural" }
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.name && formData.language && formData.category) {
+    if (formData.name && formData.language && formData.voice_type) {
       onSubmit(formData);
     }
   };
@@ -61,7 +63,7 @@ const VoiceForm = ({ onSubmit, loading = false }: VoiceFormProps) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const isFormValid = formData.name && formData.language && formData.category;
+  const isFormValid = formData.name && formData.language && formData.voice_type;
 
   return (
     <div className="animate-in slide-in-from-bottom-8 duration-500 delay-200">
@@ -104,18 +106,18 @@ const VoiceForm = ({ onSubmit, loading = false }: VoiceFormProps) => {
               </div>
 
               <div className="space-y-2 animate-in fade-in-50 duration-300 delay-500">
-                <Label htmlFor="category">Voice Category *</Label>
+                <Label htmlFor="voice_type">Voice Type *</Label>
                 <Select
-                  value={formData.category}
-                  onValueChange={(value) => updateFormData('category', value)}
+                  value={formData.voice_type}
+                  onValueChange={(value) => updateFormData('voice_type', value)}
                 >
                   <SelectTrigger className="transition-all duration-200 focus:scale-[1.02]">
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder="Select voice type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
+                    {voiceTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

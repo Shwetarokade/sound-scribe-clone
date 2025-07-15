@@ -14,10 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      generated_voices: {
+        Row: {
+          audio_url: string
+          created_at: string
+          id: string
+          input_text: string
+          output_language: string
+          pitch: number
+          speed: number
+          updated_at: string
+          user_id: string
+          voice_id: string | null
+        }
+        Insert: {
+          audio_url: string
+          created_at?: string
+          id?: string
+          input_text: string
+          output_language?: string
+          pitch?: number
+          speed?: number
+          updated_at?: string
+          user_id: string
+          voice_id?: string | null
+        }
+        Update: {
+          audio_url?: string
+          created_at?: string
+          id?: string
+          input_text?: string
+          output_language?: string
+          pitch?: number
+          speed?: number
+          updated_at?: string
+          user_id?: string
+          voice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_voices_voice_id_fkey"
+            columns: ["voice_id"]
+            isOneToOne: false
+            referencedRelation: "voices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       voices: {
         Row: {
           audio_url: string
-          category: string
           created_at: string
           description: string | null
           duration: number | null
@@ -26,10 +72,10 @@ export type Database = {
           name: string
           updated_at: string
           user_id: string
+          voice_type: string
         }
         Insert: {
           audio_url: string
-          category: string
           created_at?: string
           description?: string | null
           duration?: number | null
@@ -38,10 +84,10 @@ export type Database = {
           name: string
           updated_at?: string
           user_id: string
+          voice_type: string
         }
         Update: {
           audio_url?: string
-          category?: string
           created_at?: string
           description?: string | null
           duration?: number | null
@@ -50,6 +96,7 @@ export type Database = {
           name?: string
           updated_at?: string
           user_id?: string
+          voice_type?: string
         }
         Relationships: []
       }
