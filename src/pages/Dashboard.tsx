@@ -2,13 +2,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mic, LogOut, User, Brain } from "lucide-react";
+import { Mic, LogOut, User } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import AddVoice from "@/components/dashboard/AddVoice";
 import GenerateVoice from "@/components/dashboard/GenerateVoice";
 import VoiceLibrary from "@/components/dashboard/VoiceLibrary";
-import VoiceCloning from "@/components/dashboard/VoiceCloning";
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("library");
@@ -53,14 +52,10 @@ const Dashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="library">Voice Library</TabsTrigger>
             <TabsTrigger value="add">Add Voice</TabsTrigger>
             <TabsTrigger value="generate">Generate Voice</TabsTrigger>
-            <TabsTrigger value="clone" className="flex items-center gap-2">
-              <Brain className="h-4 w-4" />
-              Voice Cloning
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="library" className="mt-6">
@@ -73,10 +68,6 @@ const Dashboard = () => {
 
           <TabsContent value="generate" className="mt-6">
             <GenerateVoice />
-          </TabsContent>
-
-          <TabsContent value="clone" className="mt-6">
-            <VoiceCloning />
           </TabsContent>
         </Tabs>
       </div>
