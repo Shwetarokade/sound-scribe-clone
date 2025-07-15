@@ -85,6 +85,17 @@ const VoiceLibrary = () => {
 
     fetchVoices();
 
+    // Listen for voice library refresh events
+    const handleRefresh = () => {
+      fetchVoices();
+    };
+
+    window.addEventListener('voiceLibraryRefresh', handleRefresh);
+    
+    return () => {
+      window.removeEventListener('voiceLibraryRefresh', handleRefresh);
+    };
+
     // Set up real-time subscription for new voices
     const channel = supabase
       .channel('voices-changes')
@@ -221,13 +232,57 @@ const VoiceLibrary = () => {
     }
   };
 
-  const handleDownload = (audioUrl: string, voiceName: string) => {
-    const link = document.createElement('a');
-    link.href = audioUrl;
-    link.download = `${voiceName}.wav`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (audioUrl: string, voiceName: string) => {
+    try {
+      toast({
+        title: "Download starting...",
+        description: `Preparing ${voiceName} for download`,
+      });
+
+      // Fetch the audio file
+      const response = await fetch(audioUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch audio file');
+      }
+
+      // Get the blob
+      const blob = await response.blob();
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Set filename with timestamp for uniqueness
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      const fileExtension = audioUrl.includes('.wav') ? '.wav' : '.mp3';
+      link.download = `${voiceName}_${timestamp}${fileExtension}`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Download complete! 📁",
+        description: `${voiceName} has been saved to your downloads folder`,
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "Could not download the audio file. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -346,10 +401,18 @@ const VoiceLibrary = () => {
               <CardContent>
                 <div className="space-y-4">
                   <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Language: {getLanguageLabel(voice.language)}</p>
+                    <div className="flex items-center justify-between">
+                      <span>Language: {getLanguageLabel(voice.language)}</span>
+                      <Badge variant="outline" className="text-xs">
+                        AI Ready
+                      </Badge>
+                    </div>
                     <p>Created: {formatDate(voice.created_at)}</p>
                     {voice.duration && (
-                      <p>Duration: {Math.round(voice.duration)}s</p>
+                      <div className="flex items-center justify-between">
+                        <span>Duration: {Math.round(voice.duration)}s</span>
+                        <span className="text-xs text-green-600">✓ Available</span>
+                      </div>
                     )}
                   </div>
 

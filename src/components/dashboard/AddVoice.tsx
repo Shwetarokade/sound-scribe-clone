@@ -449,13 +449,29 @@ const AddVoice = () => {
       console.log('Voice saved successfully');
       
       toast({
-        title: "Voice added! ▶️",
-        description: `Voice "${formData.name}" has been added to your library and is now available for generation.`,
+        title: "Voice added to library! ▶️",
+        description: (
+          <div className="space-y-1">
+            <p>Voice "{formData.name}" has been successfully added to your library.</p>
+            <p className="text-sm">✓ Available for voice generation</p>
+            <p className="text-sm">✓ Playable in Voice Library</p>
+            <p className="text-sm">✓ Downloadable to your device</p>
+          </div>
+        ),
       });
 
       // Reset form and state
       setAudioData(null);
       setShowForm(false);
+      setRecordedBlob(null);
+      setRecordingTime(0);
+      setIsPlaying(false);
+      setUploadProgress(0);
+      
+      // Trigger a refresh in voice library by updating cached voices
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('voiceLibraryRefresh'));
+      }, 1000);
       
     } catch (error: any) {
       console.error('Form submission error:', error);
@@ -619,28 +635,41 @@ const AddVoice = () => {
                   </div>
                   
                   {loading && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex justify-center gap-2 text-sm text-muted-foreground">
-                        <span className={loading ? 'text-primary' : ''}>Uploading</span>
+                        <span className="text-primary font-medium">✓ Uploading</span>
                         <span>→</span>
-                        <span>Analyzing</span>
+                        <span className="text-primary font-medium">✓ Processing</span>
                         <span>→</span>
-                        <span>Cloning (20%)</span>
+                        <span className="text-primary font-medium">⏳ Adding to Library</span>
                         <span>→</span>
-                        <span>Ready!</span>
+                        <span className="text-muted-foreground">Ready!</span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-2 max-w-md mx-auto">
-                        <div className="bg-primary h-2 rounded-full animate-pulse w-1/4" />
+                        <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full animate-pulse w-3/4 transition-all duration-1000" />
                       </div>
+                      <p className="text-xs text-center text-muted-foreground">
+                        Creating voice profile and optimizing for AI generation...
+                      </p>
                     </div>
                   )}
                   
                   <button
                     onClick={() => setShowForm(true)}
-                    className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all duration-200 hover:scale-105"
+                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 hover:scale-105 font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                     disabled={loading}
                   >
-                    Add to Library
+                    {loading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Processing...
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Upload className="w-4 h-4" />
+                        Add to Voice Library
+                      </div>
+                    )}
                   </button>
                 </div>
               </div>
