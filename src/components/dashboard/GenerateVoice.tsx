@@ -241,7 +241,7 @@ const GenerateVoice = () => {
       setCloneProgress(0);
       
       // Refresh voices list
-      await Promise.all([loadClonedVoices(), fetchData()]);
+      await fetchData();
       
     } catch (error) {
       console.error('Voice cloning error:', error);
@@ -256,17 +256,10 @@ const GenerateVoice = () => {
     }
   };
 
-  // Load cloned voices
+  // Load cloned voices (now integrated into fetchData)
   const loadClonedVoices = async () => {
-    try {
-      const response = await fetch('/api/voices?user_id=' + user?.id);
-      if (response.ok) {
-        const data = await response.json();
-        setClonedVoices(data.data.filter((v: any) => v.provider === 'elevenlabs'));
-      }
-    } catch (error) {
-      console.error('Error loading cloned voices:', error);
-    }
+    // This function is now integrated into fetchData for better consistency
+    await fetchData();
   };
 
   // Load usage info
@@ -286,39 +279,65 @@ const GenerateVoice = () => {
   const fetchData = async () => {
     if (!user) return;
 
-    // Fetch voices
-    const { data: voicesData, error: voicesError } = await supabase
-      .from('voices')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    try {
+      // Fetch all voices including cloned ones
+      const { data: voicesData, error: voicesError } = await supabase
+        .from('voices')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-    if (voicesError) {
-      console.error('Error fetching voices:', voicesError);
+      if (voicesError) {
+        console.error('Error fetching voices:', voicesError);
+        toast({
+          title: "Error",
+          description: "Failed to load your voices.",
+          variant: "destructive"
+        });
+      } else {
+        // Separate regular voices and cloned voices
+        const regularVoices = voicesData?.filter(v => !v.is_cloned && v.provider !== 'elevenlabs') || [];
+        const clonedVoicesData = voicesData?.filter(v => v.is_cloned || v.provider === 'elevenlabs') || [];
+        
+        setVoices(regularVoices);
+        setClonedVoices(clonedVoicesData.map(v => ({
+          id: v.id,
+          name: v.name,
+          description: v.description || '',
+          external_voice_id: v.external_voice_id || v.id,
+          provider: v.provider || 'local',
+          created_at: v.created_at
+        })));
+        
+        console.log('Loaded voices:', {
+          regular: regularVoices.length,
+          cloned: clonedVoicesData.length
+        });
+      }
+
+      // Fetch recent generations
+      const { data: generationsData, error: generationsError } = await supabase
+        .from('generated_voices')
+        .select(`
+          *,
+          voices:voice_id (name, voice_type)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (generationsError) {
+        console.error('Error fetching generations:', generationsError);
+      } else {
+        setRecentGenerations(generationsData || []);
+      }
+    } catch (error) {
+      console.error('Error in fetchData:', error);
       toast({
         title: "Error",
-        description: "Failed to load your voices.",
+        description: "Failed to load voice data. Please refresh the page.",
         variant: "destructive"
       });
-    } else {
-      setVoices(voicesData || []);
-    }
-
-    // Fetch recent generations
-    const { data: generationsData, error: generationsError } = await supabase
-      .from('generated_voices')
-      .select(`
-        *,
-        voices:voice_id (name, voice_type)
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (generationsError) {
-      console.error('Error fetching generations:', generationsError);
-    } else {
-      setRecentGenerations(generationsData || []);
     }
   };
 
@@ -338,42 +357,114 @@ const GenerateVoice = () => {
     setIsTransliterating(true);
     
     try {
-      // Using Google Input Tools API for transliteration
-      const languageCode = languageMap[targetLanguage] || "hindi";
-      const response = await fetch(`https://inputtools.google.com/request?text=${encodeURIComponent(inputText)}&itc=${languageCode}-t-i0-pinyin&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8&app=demopage`);
+      // Using multiple transliteration methods for better accuracy
+      let transliterated = '';
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data[1] && data[1][0] && data[1][0][1] && data[1][0][1][0]) {
-          const transliterated = data[1][0][1][0];
-          setTransliteratedText(transliterated);
-          
-          toast({
-            title: "Transliteration complete",
-            description: `Text transliterated to ${indianLanguages.find(l => l.value === targetLanguage)?.label}`,
-          });
-        } else {
-          // Fallback to enhanced mock transliteration
-          const fallbackTransliterated = enhancedMockTransliterate(inputText, targetLanguage);
-          setTransliteratedText(fallbackTransliterated);
+      // Method 1: Try Google Input Tools API
+      try {
+        const languageCode = languageMap[targetLanguage] || "hindi";
+        const googleResponse = await fetch(`https://inputtools.google.com/request?text=${encodeURIComponent(inputText)}&itc=${languageCode}-t-i0-und&num=5&cp=0&cs=1&ie=utf-8&oe=utf-8&app=demopage`, {
+          mode: 'cors'
+        });
+        
+        if (googleResponse.ok) {
+          const data = await googleResponse.json();
+          if (data[1] && data[1][0] && data[1][0][1] && data[1][0][1][0]) {
+            transliterated = data[1][0][1][0];
+          }
         }
-      } else {
-        throw new Error('Transliteration API failed');
+      } catch (googleError) {
+        console.log('Google transliteration not available, using local method');
+      }
+      
+      // Method 2: If Google fails, use enhanced local transliteration
+      if (!transliterated) {
+        transliterated = enhancedMockTransliterate(inputText, targetLanguage);
+      }
+      
+      // Method 3: For Hindi, try Indic transliteration
+      if (targetLanguage === 'hi' && !transliterated) {
+        transliterated = hindiTransliteration(inputText);
+      }
+      
+      setTransliteratedText(transliterated || inputText);
+      
+      if (transliterated !== inputText) {
+        toast({
+          title: "Transliteration complete",
+          description: `Text converted to ${indianLanguages.find(l => l.value === targetLanguage)?.label}`,
+        });
       }
     } catch (error) {
       console.error('Transliteration error:', error);
-      // Enhanced fallback transliteration
+      // Ultimate fallback
       const fallbackTransliterated = enhancedMockTransliterate(inputText, targetLanguage);
       setTransliteratedText(fallbackTransliterated);
       
       toast({
         title: "Using offline transliteration",
-        description: "Google transliteration unavailable, using local fallback",
-        variant: "destructive"
+        description: "Online services unavailable, using local transliteration",
       });
     } finally {
       setIsTransliterating(false);
     }
+  };
+
+  // Enhanced Hindi transliteration with more comprehensive mapping
+  const hindiTransliteration = (input: string) => {
+    const hindiMap: { [key: string]: string } = {
+      // Vowels
+      'a': 'अ', 'aa': 'आ', 'i': 'इ', 'ii': 'ई', 'u': 'उ', 'uu': 'ऊ',
+      'e': 'ए', 'ai': 'ऐ', 'o': 'ओ', 'au': 'औ', 'ri': 'ऋ',
+      
+      // Consonants with vowels
+      'ka': 'क', 'kha': 'ख', 'ga': 'ग', 'gha': 'घ', 'nga': 'ङ',
+      'cha': 'च', 'chha': 'छ', 'ja': 'ज', 'jha': 'झ', 'nya': 'ञ',
+      'ta': 'त', 'tha': 'थ', 'da': 'द', 'dha': 'ध', 'na': 'न',
+      'pa': 'प', 'pha': 'फ', 'ba': 'ब', 'bha': 'भ', 'ma': 'म',
+      'ya': 'य', 'ra': 'र', 'la': 'ल', 'va': 'व', 'wa': 'व',
+      'sha': 'श', 'shha': 'ष', 'sa': 'स', 'ha': 'ह',
+      
+      // Simple consonants
+      'k': 'क्', 'kh': 'ख्', 'g': 'ग्', 'gh': 'घ्', 'ng': 'ङ्',
+      'ch': 'च्', 'chh': 'छ्', 'j': 'ज्', 'jh': 'झ्', 'ny': 'ञ्',
+      't': 'त्', 'th': 'थ्', 'd': 'द्', 'dh': 'ध्', 'n': 'न्',
+      'p': 'प्', 'ph': 'फ्', 'b': 'ब्', 'bh': 'भ्', 'm': 'म्',
+      'y': 'य्', 'r': 'र्', 'l': 'ल्', 'v': 'व्', 'w': 'व्',
+      'sh': 'श्', 's': 'स्', 'h': 'ह्',
+      
+      // Common words
+      'namaste': 'नमस्ते', 'dhanyawad': 'धन्यवाद', 'kaise': 'कैसे',
+      'kya': 'क्या', 'hai': 'है', 'hain': 'हैं', 'ke': 'के', 'ki': 'की',
+      'main': 'मैं', 'aap': 'आप', 'tum': 'तुम', 'hum': 'हम',
+    };
+
+    return input.toLowerCase().split(/\s+/).map(word => {
+      // Check for exact word matches first
+      if (hindiMap[word]) return hindiMap[word];
+      
+      // Try syllable-based transliteration
+      let result = '';
+      let i = 0;
+      while (i < word.length) {
+        let matched = false;
+        // Try longer patterns first
+        for (let len = 4; len >= 1; len--) {
+          const substr = word.substr(i, len);
+          if (hindiMap[substr]) {
+            result += hindiMap[substr];
+            i += len;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          result += word[i];
+          i++;
+        }
+      }
+      return result || word;
+    }).join(' ');
   };
 
   // Enhanced mock transliteration with better language support
@@ -396,9 +487,9 @@ const GenerateVoice = () => {
         'a': 'அ', 'aa': 'ஆ', 'i': 'இ', 'ii': 'ஈ', 'u': 'உ', 'uu': 'ஊ',
         'e': 'எ', 'ee': 'ஏ', 'ai': 'ஐ', 'o': 'ஒ', 'oo': 'ஓ', 'au': 'ஔ',
         'ka': 'க', 'nga': 'ங', 'cha': 'ச', 'ja': 'ஜ', 'nya': 'ஞ',
-        'ta': 'ட', 'na': 'ண', 'tha': 'த', 'nha': 'ந', 'pa': 'ப',
+        'ta': 'ட', 'nna': 'ண', 'tha': 'த', 'nha': 'ந', 'pa': 'ப',
         'ma': 'ம', 'ya': 'ய', 'ra': 'ர', 'la': 'ல', 'va': 'வ',
-        'zha': 'ழ', 'la': 'ள', 'ra': 'ற', 'na': 'ன', 'sa': 'ஸ', 'ha': 'ஹ'
+        'zha': 'ழ', 'lla': 'ள', 'rra': 'ற', 'naa': 'ன', 'sa': 'ஸ', 'ha': 'ஹ'
       }
     };
 
@@ -479,11 +570,17 @@ const GenerateVoice = () => {
     
     try {
       // Find selected voice details
-      const selectedVoiceData = voices.find(v => v.id === selectedVoice);
+      const selectedVoiceData = voices.find(v => v.external_voice_id === selectedVoice || v.id === selectedVoice);
+      const clonedVoiceData = clonedVoices.find(v => v.external_voice_id === selectedVoice);
+      const voiceData = selectedVoiceData || clonedVoiceData;
       
+      if (!voiceData) {
+        throw new Error("Selected voice not found");
+      }
+
       console.log("Generating voice:", {
         voiceId: selectedVoice,
-        voiceName: selectedVoiceData?.name,
+        voiceName: voiceData?.name,
         text: transliteratedText || text,
         outputLanguage,
         speed: speed[0],
@@ -493,12 +590,91 @@ const GenerateVoice = () => {
       // Use transliterated text for generation
       const textToGenerate = transliteratedText || text;
 
-      // Simulate generation process with realistic timing
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Mock generated audio URL (in production, this would call your voice generation API)
-      const mockAudioUrl = "mock-audio-url-generated";
-      setGeneratedAudio(mockAudioUrl);
+      let audioUrl = null;
+      let audioBlob = null;
+
+      // Check if this is a cloned voice (ElevenLabs)
+      if (voiceData.provider === 'elevenlabs' && voiceData.external_voice_id) {
+        try {
+          // Use the voice cloning API for ElevenLabs voices
+          const response = await fetch('/api/voice-cloning/synthesize', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text: textToGenerate,
+              voice_id: voiceData.external_voice_id,
+              options: {
+                stability: voiceSettings.stability,
+                similarity_boost: voiceSettings.similarity_boost,
+                style: voiceSettings.style,
+                use_speaker_boost: voiceSettings.use_speaker_boost,
+                model_id: voiceSettings.model_id
+              },
+            }),
+          });
+
+          if (response.ok) {
+            audioBlob = await response.blob();
+            audioUrl = URL.createObjectURL(audioBlob);
+            setGeneratedAudio(audioUrl);
+          } else {
+            const error = await response.json();
+            throw new Error(error.details || 'Failed to generate speech with cloned voice');
+          }
+        } catch (elevenLabsError) {
+          console.error('ElevenLabs generation failed:', elevenLabsError);
+          // Fallback to local generation or show error
+          throw elevenLabsError;
+        }
+      } else {
+        // For local/regular voices, use text-to-speech API or Web Speech API
+        try {
+          // Try using Web Speech API as fallback
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(textToGenerate);
+            utterance.rate = speed[0];
+            utterance.pitch = pitch[0];
+            utterance.lang = outputLanguage === 'en-in' ? 'en-IN' : outputLanguage;
+            
+            // Find a suitable voice
+            const availableVoices = speechSynthesis.getVoices();
+            const selectedSynthVoice = availableVoices.find(v => 
+              v.name.toLowerCase().includes(voiceData.name.toLowerCase()) ||
+              v.lang.includes(outputLanguage) ||
+              v.lang.includes('en-IN')
+            );
+            
+            if (selectedSynthVoice) {
+              utterance.voice = selectedSynthVoice;
+            }
+
+            // Create a promise for speech synthesis
+            await new Promise((resolve, reject) => {
+              utterance.onend = resolve;
+              utterance.onerror = reject;
+              speechSynthesis.speak(utterance);
+            });
+
+            // Create a mock audio URL for local voices
+            audioUrl = "local-speech-synthesis";
+            setGeneratedAudio(audioUrl);
+          } else {
+            throw new Error("Speech synthesis not supported");
+          }
+        } catch (localError) {
+          console.error('Local voice generation failed:', localError);
+          // Create a mock audio for demo purposes
+          audioUrl = "mock-audio-generated";
+          setGeneratedAudio(audioUrl);
+          
+          toast({
+            title: "Demo Mode",
+            description: "Audio generation simulated. Connect voice services for real audio.",
+          });
+        }
+      }
 
       // Save to generated_voices table
       const { error: saveError } = await supabase
@@ -506,11 +682,11 @@ const GenerateVoice = () => {
         .insert({
           user_id: user?.id,
           input_text: textToGenerate,
-          voice_id: selectedVoice,
+          voice_id: voiceData.id,
           output_language: outputLanguage,
           speed: speed[0],
           pitch: pitch[0],
-          audio_url: mockAudioUrl
+          audio_url: audioUrl || 'generated'
         });
 
       if (saveError) {
@@ -531,13 +707,14 @@ const GenerateVoice = () => {
       }
       
       toast({
-        title: "Success!",
-        description: `Voice generated successfully using ${selectedVoiceData?.name}.`,
+        title: "Speech Generated! 🎵",
+        description: `Audio generated successfully using ${voiceData?.name}. Click play to listen.`,
       });
       
     } catch (error: any) {
+      console.error('Voice generation error:', error);
       toast({
-        title: "Error",
+        title: "Generation Failed",
         description: error.message || "Failed to generate voice. Please try again.",
         variant: "destructive"
       });
@@ -599,14 +776,65 @@ const GenerateVoice = () => {
   };
 
   const handlePlayPause = () => {
-    if (!audioRef.current || !generatedAudio) return;
+    if (!generatedAudio) return;
     
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
+    // Handle different types of generated audio
+    if (generatedAudio === "local-speech-synthesis") {
+      // For Web Speech API, replay the utterance
+      if ('speechSynthesis' in window) {
+        if (isPlaying) {
+          speechSynthesis.cancel();
+          setIsPlaying(false);
+        } else {
+          const textToSpeak = transliteratedText || text;
+          const utterance = new SpeechSynthesisUtterance(textToSpeak);
+          utterance.rate = speed[0];
+          utterance.pitch = pitch[0];
+          utterance.lang = outputLanguage === 'en-in' ? 'en-IN' : outputLanguage;
+          
+          utterance.onstart = () => setIsPlaying(true);
+          utterance.onend = () => setIsPlaying(false);
+          utterance.onerror = () => setIsPlaying(false);
+          
+          speechSynthesis.speak(utterance);
+        }
+      }
+    } else if (generatedAudio === "mock-audio-generated") {
+      // For mock audio, simulate playback
+      if (isPlaying) {
+        setIsPlaying(false);
+      } else {
+        setIsPlaying(true);
+        // Simulate 3 second playback
+        setTimeout(() => setIsPlaying(false), 3000);
+        
+        toast({
+          title: "Demo Playback",
+          description: "This is simulated audio playback. Real audio will play here when voice services are connected.",
+        });
+      }
+    } else if (audioRef.current) {
+      // For real audio files (blob URLs from ElevenLabs)
+      try {
+        if (isPlaying) {
+          audioRef.current.pause();
+        } else {
+          // Ensure the audio source is set
+          if (audioRef.current.src !== generatedAudio) {
+            audioRef.current.src = generatedAudio;
+          }
+          audioRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+      } catch (error) {
+        console.error('Audio playback error:', error);
+        toast({
+          title: "Playback Error",
+          description: "Could not play the generated audio. Please try generating again.",
+          variant: "destructive"
+        });
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleDownload = async () => {
@@ -620,23 +848,55 @@ const GenerateVoice = () => {
     }
 
     try {
-      const link = document.createElement('a');
-      link.href = generatedAudio;
+      // Get voice data for filename
+      const selectedVoiceData = voices.find(v => v.external_voice_id === selectedVoice || v.id === selectedVoice);
+      const clonedVoiceData = clonedVoices.find(v => v.external_voice_id === selectedVoice);
+      const voiceData = selectedVoiceData || clonedVoiceData;
       
-      // Create filename with selected voice and timestamp
-      const selectedVoiceData = voices.find(v => v.id === selectedVoice);
       const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      const fileName = `generated_${selectedVoiceData?.name || 'voice'}_${timestamp}.mp3`;
-      link.download = fileName;
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toast({
-        title: "Download complete! 📁",
-        description: `Generated audio saved as ${fileName}`,
-      });
+      const fileName = `generated_${voiceData?.name || 'voice'}_${timestamp}.mp3`;
+
+      if (generatedAudio.startsWith('blob:')) {
+        // Real audio blob (from ElevenLabs)
+        const link = document.createElement('a');
+        link.href = generatedAudio;
+        link.download = fileName;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast({
+          title: "Download complete! 📁",
+          description: `Generated audio saved as ${fileName}`,
+        });
+      } else if (generatedAudio === "local-speech-synthesis") {
+        // Web Speech API - inform user about limitation
+        toast({
+          title: "Download not available",
+          description: "Browser speech synthesis cannot be downloaded. Use voice cloning for downloadable audio.",
+        });
+      } else {
+        // Mock or other audio types - create a demo file
+        const mockText = `This is a demo audio file generated using ${voiceData?.name || 'voice'} with the text: "${transliteratedText || text}"`;
+        const blob = new Blob([mockText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName.replace('.mp3', '.txt');
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Demo file downloaded",
+          description: "Demo text file saved. Connect voice services for real audio downloads.",
+        });
+      }
     } catch (error) {
       console.error('Download error:', error);
       toast({
