@@ -130,12 +130,21 @@ router.post('/clone', upload.single('audio'), async (req, res) => {
         user_id,
         name,
         language,
-        category,
-        description,
         voice_type: 'cloned',
+        description,
         external_voice_id: cloneResult.voice_id,
         provider: 'elevenlabs',
         audio_url: null, // ElevenLabs handles audio storage
+        duration: 0, // Will be set when we get audio metadata
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.8,
+          style: 0.0,
+          use_speaker_boost: true,
+          model_id: 'eleven_multilingual_v2'
+        },
+        is_cloned: true,
+        clone_quality: 'standard',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
