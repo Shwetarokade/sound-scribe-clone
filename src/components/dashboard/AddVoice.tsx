@@ -355,34 +355,18 @@ const AddVoice = () => {
     }
 
     console.log('Form submission started:', formData);
-    setLoading(true);
 
     try {
-      // Create trimmed audio file
-      const trimmedFile = await createTrimmedAudio(
-        audioData.file, 
-        audioData.trimStart, 
-        audioData.trimEnd
-      );
-      
-      console.log('Trimmed file created:', { 
-        originalSize: audioData.file.size, 
-        trimmedSize: trimmedFile.size 
-      });
-
-      // Create unique file name
+      // Create optimistic voice object FIRST (before any async operations)
       const timestamp = Date.now();
-      const fileName = `${timestamp}_${formData.name.replace(/\s+/g, '_')}.${trimmedFile.name.split('.').pop()}`;
-      
-      // Create optimistic voice object (immediately show in UI)
       const optimisticVoice = {
-        id: `temp-${timestamp}`, // Temporary ID
+        id: `temp-${timestamp}`, 
         user_id: user.id,
         name: formData.name,
         language: formData.language,
         voice_type: formData.voice_type,
         description: formData.description || null,
-        audio_url: URL.createObjectURL(trimmedFile), // Temporary local URL
+        audio_url: URL.createObjectURL(audioData.file), // Use original file for immediate preview
         duration: Math.round(audioData.trimEnd - audioData.trimStart),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -406,75 +390,91 @@ const AddVoice = () => {
       setRecordingTime(0);
       setIsPlaying(false);
       setUploadProgress(0);
-      setLoading(false);
 
-      // Upload and save to database in the background
-      try {
-        // Upload to Supabase Storage
-        const audioUrl = await uploadToSupabase(trimmedFile, fileName);
+      // Upload and save to database in the background (async)
+      setTimeout(async () => {
+        try {
+          // Create trimmed audio file
+          const trimmedFile = await createTrimmedAudio(
+            audioData.file, 
+            audioData.trimStart, 
+            audioData.trimEnd
+          );
+          
+          console.log('Trimmed file created:', { 
+            originalSize: audioData.file.size, 
+            trimmedSize: trimmedFile.size 
+          });
 
-        // Save to database
-        const { data: insertedData, error: dbError } = await supabase
-          .from('voices')
-          .insert({
-            user_id: user.id,
-            name: formData.name,
-            language: formData.language,
-            voice_type: formData.voice_type,
-            description: formData.description || null,
-            audio_url: audioUrl,
-            duration: Math.round(audioData.trimEnd - audioData.trimStart)
-          })
-          .select()
-          .single();
+          // Create unique file name
+          const fileName = `${timestamp}_${formData.name.replace(/\s+/g, '_')}.${trimmedFile.name.split('.').pop()}`;
+          
+          // Upload to Supabase Storage
+          const audioUrl = await uploadToSupabase(trimmedFile, fileName);
 
-        if (dbError) {
-          console.error('Database error:', dbError);
+          // Save to database
+          const { data: insertedData, error: dbError } = await supabase
+            .from('voices')
+            .insert({
+              user_id: user.id,
+              name: formData.name,
+              language: formData.language,
+              voice_type: formData.voice_type,
+              description: formData.description || null,
+              audio_url: audioUrl,
+              duration: Math.round(audioData.trimEnd - audioData.trimStart)
+            })
+            .select()
+            .single();
+
+          if (dbError) {
+            console.error('Database error:', dbError);
+            
+            // Remove optimistic update and show error
+            window.dispatchEvent(new CustomEvent('voiceAddedError', { 
+              detail: { 
+                tempId: optimisticVoice.id,
+                error: dbError.message 
+              }
+            }));
+            
+            toast({
+              title: "Upload failed",
+              description: "Voice removed from library. Please try again.",
+              variant: "destructive"
+            });
+            
+            return;
+          }
+
+          // Replace optimistic update with real data
+          window.dispatchEvent(new CustomEvent('voiceAddedSuccess', { 
+            detail: { 
+              tempId: optimisticVoice.id,
+              realVoice: insertedData
+            }
+          }));
+
+          console.log('Voice saved successfully to database');
+          
+        } catch (backgroundError: any) {
+          console.error('Background upload error:', backgroundError);
           
           // Remove optimistic update and show error
           window.dispatchEvent(new CustomEvent('voiceAddedError', { 
             detail: { 
               tempId: optimisticVoice.id,
-              error: dbError.message 
+              error: backgroundError.message 
             }
           }));
           
           toast({
-            title: "Upload failed",
+            title: "Upload failed", 
             description: "Voice removed from library. Please try again.",
             variant: "destructive"
           });
-          
-          return;
         }
-
-        // Replace optimistic update with real data
-        window.dispatchEvent(new CustomEvent('voiceAddedSuccess', { 
-          detail: { 
-            tempId: optimisticVoice.id,
-            realVoice: insertedData
-          }
-        }));
-
-        console.log('Voice saved successfully to database');
-        
-      } catch (backgroundError: any) {
-        console.error('Background upload error:', backgroundError);
-        
-        // Remove optimistic update and show error
-        window.dispatchEvent(new CustomEvent('voiceAddedError', { 
-          detail: { 
-            tempId: optimisticVoice.id,
-            error: backgroundError.message 
-          }
-        }));
-        
-        toast({
-          title: "Upload failed", 
-          description: "Voice removed from library. Please try again.",
-          variant: "destructive"
-        });
-      }
+      }, 100); // Small delay to ensure UI updates first
       
     } catch (error: any) {
       console.error('Form submission error:', error);
