@@ -84,7 +84,10 @@ const VoiceLibrary = () => {
     };
 
     fetchVoices();
+  }, [user, toast]);
 
+  // Separate useEffect for optimistic updates
+  useEffect(() => {
     // Listen for optimistic voice updates
     const handleVoiceAdded = (event: any) => {
       const newVoice = event.detail;
@@ -104,7 +107,16 @@ const VoiceLibrary = () => {
     };
 
     const handleRefresh = () => {
-      fetchVoices();
+      if (user) {
+        supabase
+          .from('voices')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .then(({ data }) => {
+            if (data) setVoices(data);
+          });
+      }
     };
 
     window.addEventListener('voiceAdded', handleVoiceAdded);
@@ -118,8 +130,12 @@ const VoiceLibrary = () => {
       window.removeEventListener('voiceAddedError', handleVoiceAddedError);
       window.removeEventListener('voiceLibraryRefresh', handleRefresh);
     };
+  }, [user]);
 
-    // Set up real-time subscription for new voices
+  // Separate useEffect for real-time subscription
+  useEffect(() => {
+    if (!user) return;
+
     const channel = supabase
       .channel('voices-changes')
       .on(
@@ -128,27 +144,17 @@ const VoiceLibrary = () => {
           event: 'INSERT',
           schema: 'public',
           table: 'voices',
-          filter: `user_id=eq.${user?.id}`
+          filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          console.log('New voice added:', payload.new);
+          console.log('New voice added via Supabase:', payload.new);
           const newVoice = payload.new as Voice;
           
-          // Add new voice at the top with slide-in animation
-          setVoices(prev => [newVoice, ...prev]);
-          
-          // Show toast with play button
-          toast({
-            title: "Voice added! ▶️",
-            description: `${newVoice.name} is now in your library`,
-            action: (
-              <button
-                onClick={() => handlePlayPause(newVoice.id, newVoice.audio_url)}
-                className="bg-primary text-primary-foreground px-3 py-1 rounded text-sm hover:bg-primary/90"
-              >
-                ▶️ Play
-              </button>
-            ),
+          // Only add if it's not already in the list (avoid duplicates from optimistic updates)
+          setVoices(prev => {
+            const existsAlready = prev.some(v => v.id === newVoice.id);
+            if (existsAlready) return prev;
+            return [newVoice, ...prev];
           });
         }
       )
@@ -157,7 +163,7 @@ const VoiceLibrary = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, toast]);
+  }, [user]);
 
   const filteredVoices = voices.filter(voice => {
     const matchesSearch = voice.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
