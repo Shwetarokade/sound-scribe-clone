@@ -85,14 +85,37 @@ const VoiceLibrary = () => {
 
     fetchVoices();
 
-    // Listen for voice library refresh events
+    // Listen for optimistic voice updates
+    const handleVoiceAdded = (event: any) => {
+      const newVoice = event.detail;
+      setVoices(prev => [newVoice, ...prev]);
+    };
+
+    const handleVoiceAddedSuccess = (event: any) => {
+      const { tempId, realVoice } = event.detail;
+      setVoices(prev => prev.map(voice => 
+        voice.id === tempId ? realVoice : voice
+      ));
+    };
+
+    const handleVoiceAddedError = (event: any) => {
+      const { tempId } = event.detail;
+      setVoices(prev => prev.filter(voice => voice.id !== tempId));
+    };
+
     const handleRefresh = () => {
       fetchVoices();
     };
 
+    window.addEventListener('voiceAdded', handleVoiceAdded);
+    window.addEventListener('voiceAddedSuccess', handleVoiceAddedSuccess);
+    window.addEventListener('voiceAddedError', handleVoiceAddedError);
     window.addEventListener('voiceLibraryRefresh', handleRefresh);
     
     return () => {
+      window.removeEventListener('voiceAdded', handleVoiceAdded);
+      window.removeEventListener('voiceAddedSuccess', handleVoiceAddedSuccess);
+      window.removeEventListener('voiceAddedError', handleVoiceAddedError);
       window.removeEventListener('voiceLibraryRefresh', handleRefresh);
     };
 

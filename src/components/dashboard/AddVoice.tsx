@@ -374,104 +374,107 @@ const AddVoice = () => {
       const timestamp = Date.now();
       const fileName = `${timestamp}_${formData.name.replace(/\s+/g, '_')}.${trimmedFile.name.split('.').pop()}`;
       
-      // Upload to Supabase Storage
-      const audioUrl = await uploadToSupabase(trimmedFile, fileName);
+      // Create optimistic voice object (immediately show in UI)
+      const optimisticVoice = {
+        id: `temp-${timestamp}`, // Temporary ID
+        user_id: user.id,
+        name: formData.name,
+        language: formData.language,
+        voice_type: formData.voice_type,
+        description: formData.description || null,
+        audio_url: URL.createObjectURL(trimmedFile), // Temporary local URL
+        duration: Math.round(audioData.trimEnd - audioData.trimStart),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
-      // Save to database
-      const { error: dbError } = await supabase
-        .from('voices')
-        .insert({
-          user_id: user.id,
-          name: formData.name,
-          language: formData.language,
-          voice_type: formData.voice_type,
-          description: formData.description || null,
-          audio_url: audioUrl,
-          duration: Math.round(audioData.trimEnd - audioData.trimStart)
-        });
+      // Immediately show in Voice Library (optimistic update)
+      window.dispatchEvent(new CustomEvent('voiceAdded', { 
+        detail: optimisticVoice 
+      }));
 
-      if (dbError) {
-        console.error('Database error:', dbError);
-        
-        // Cache data locally for retry
-        const voiceData = {
-          user_id: user.id,
-          name: formData.name,
-          language: formData.language,
-          voice_type: formData.voice_type,
-          description: formData.description || null,
-          audio_url: audioUrl,
-          duration: Math.round(audioData.trimEnd - audioData.trimStart)
-        };
-        
-        toast({
-          title: "Voice cached locally",
-          description: "Will retry uploading in background every 3 seconds.",
-        });
-        
-        // Start retry mechanism
-        let retryCount = 0;
-        const retryInterval = setInterval(async () => {
-          try {
-            const { error: retryError } = await supabase
-              .from('voices')
-              .insert(voiceData);
-              
-            if (!retryError) {
-              clearInterval(retryInterval);
-              toast({
-                title: "Voice added! ▶️",
-                description: "Voice uploaded successfully after retry.",
-              });
-            } else {
-              retryCount++;
-              if (retryCount >= 10) {
-                clearInterval(retryInterval);
-                toast({
-                  title: "Upload failed",
-                  description: "Please check your connection and try again.",
-                  variant: "destructive"
-                });
-              }
-            }
-          } catch (retryErr) {
-            console.error('Retry failed:', retryErr);
-            retryCount++;
-            if (retryCount >= 10) {
-              clearInterval(retryInterval);
-            }
-          }
-        }, 3000);
-        
-        return;
-      }
-
-      console.log('Voice saved successfully');
-      
+      // Show immediate success message
       toast({
         title: "Voice added to library! ▶️",
-        description: (
-          <div className="space-y-1">
-            <p>Voice "{formData.name}" has been successfully added to your library.</p>
-            <p className="text-sm">✓ Available for voice generation</p>
-            <p className="text-sm">✓ Playable in Voice Library</p>
-            <p className="text-sm">✓ Downloadable to your device</p>
-          </div>
-        ),
+        description: `${formData.name} is now available in your Voice Library`,
       });
 
-      // Reset form and state
+      // Reset form and state immediately
       setAudioData(null);
       setShowForm(false);
       setRecordedBlob(null);
       setRecordingTime(0);
       setIsPlaying(false);
       setUploadProgress(0);
-      
-      // Trigger a refresh in voice library by updating cached voices
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('voiceLibraryRefresh'));
-      }, 1000);
+      setLoading(false);
+
+      // Upload and save to database in the background
+      try {
+        // Upload to Supabase Storage
+        const audioUrl = await uploadToSupabase(trimmedFile, fileName);
+
+        // Save to database
+        const { data: insertedData, error: dbError } = await supabase
+          .from('voices')
+          .insert({
+            user_id: user.id,
+            name: formData.name,
+            language: formData.language,
+            voice_type: formData.voice_type,
+            description: formData.description || null,
+            audio_url: audioUrl,
+            duration: Math.round(audioData.trimEnd - audioData.trimStart)
+          })
+          .select()
+          .single();
+
+        if (dbError) {
+          console.error('Database error:', dbError);
+          
+          // Remove optimistic update and show error
+          window.dispatchEvent(new CustomEvent('voiceAddedError', { 
+            detail: { 
+              tempId: optimisticVoice.id,
+              error: dbError.message 
+            }
+          }));
+          
+          toast({
+            title: "Upload failed",
+            description: "Voice removed from library. Please try again.",
+            variant: "destructive"
+          });
+          
+          return;
+        }
+
+        // Replace optimistic update with real data
+        window.dispatchEvent(new CustomEvent('voiceAddedSuccess', { 
+          detail: { 
+            tempId: optimisticVoice.id,
+            realVoice: insertedData
+          }
+        }));
+
+        console.log('Voice saved successfully to database');
+        
+      } catch (backgroundError: any) {
+        console.error('Background upload error:', backgroundError);
+        
+        // Remove optimistic update and show error
+        window.dispatchEvent(new CustomEvent('voiceAddedError', { 
+          detail: { 
+            tempId: optimisticVoice.id,
+            error: backgroundError.message 
+          }
+        }));
+        
+        toast({
+          title: "Upload failed", 
+          description: "Voice removed from library. Please try again.",
+          variant: "destructive"
+        });
+      }
       
     } catch (error: any) {
       console.error('Form submission error:', error);
@@ -480,7 +483,6 @@ const AddVoice = () => {
         description: error.message || "Failed to add voice. Please try again.",
         variant: "destructive"
       });
-    } finally {
       setLoading(false);
     }
   };
