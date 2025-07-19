@@ -18,8 +18,11 @@ export type Database = {
         Row: {
           audio_url: string
           created_at: string
+          duration_seconds: number | null
           id: string
           input_text: string
+          is_favorite: boolean | null
+          name: string | null
           output_language: string
           pitch: number
           speed: number
@@ -30,8 +33,11 @@ export type Database = {
         Insert: {
           audio_url: string
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           input_text: string
+          is_favorite?: boolean | null
+          name?: string | null
           output_language?: string
           pitch?: number
           speed?: number
@@ -42,8 +48,11 @@ export type Database = {
         Update: {
           audio_url?: string
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           input_text?: string
+          is_favorite?: boolean | null
+          name?: string | null
           output_language?: string
           pitch?: number
           speed?: number

@@ -7,6 +7,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import voicesRouter from './routes/voices.js';
 import voiceCloningRouter from './routes/voiceCloning.js';
+import speechGenerationRouter from './routes/speechGeneration.js';
 
 // Load environment variables
 dotenv.config();
@@ -214,6 +215,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
 // API Routes
 app.use('/api/voices', voicesRouter);
 app.use('/api/voice-cloning', voiceCloningRouter);
+app.use('/api', speechGenerationRouter);
 
 // Health check endpoint
 /**
