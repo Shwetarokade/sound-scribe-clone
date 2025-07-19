@@ -59,7 +59,7 @@ router.post('/generate-speech', async (req, res) => {
 
     // Insert into database
     const { data, error } = await supabase
-      .from('generated_voices')
+      .from('voice_generations')
       .insert([newGeneration])
       .select()
       .single();
@@ -103,18 +103,17 @@ router.get('/voice-generations', async (req, res) => {
 
     // Fetch voice generations from database
     const { data, error } = await supabase
-      .from('generated_voices')
+      .from('voice_generations')
       .select(`
         id,
         user_id,
         voice_id,
-        input_text,
+        text,
         audio_url,
         is_favorite,
         duration_seconds,
         name,
-        created_at,
-        updated_at
+        created_at
       `)
       .eq('user_id', user_id)
       .order('created_at', { ascending: false });

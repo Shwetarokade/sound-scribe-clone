@@ -14,19 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      generated_voices: {
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      voice_generations: {
         Row: {
           audio_url: string
           created_at: string
           duration_seconds: number | null
           id: string
-          input_text: string
-          is_favorite: boolean | null
+          is_favorite: boolean
           name: string | null
-          output_language: string
-          pitch: number
-          speed: number
-          updated_at: string
+          text: string
           user_id: string
           voice_id: string | null
         }
@@ -35,13 +52,9 @@ export type Database = {
           created_at?: string
           duration_seconds?: number | null
           id?: string
-          input_text: string
-          is_favorite?: boolean | null
+          is_favorite?: boolean
           name?: string | null
-          output_language?: string
-          pitch?: number
-          speed?: number
-          updated_at?: string
+          text: string
           user_id: string
           voice_id?: string | null
         }
@@ -50,19 +63,22 @@ export type Database = {
           created_at?: string
           duration_seconds?: number | null
           id?: string
-          input_text?: string
-          is_favorite?: boolean | null
+          is_favorite?: boolean
           name?: string | null
-          output_language?: string
-          pitch?: number
-          speed?: number
-          updated_at?: string
+          text?: string
           user_id?: string
           voice_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "generated_voices_voice_id_fkey"
+            foreignKeyName: "voice_generations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_generations_voice_id_fkey"
             columns: ["voice_id"]
             isOneToOne: false
             referencedRelation: "voices"
@@ -72,42 +88,53 @@ export type Database = {
       }
       voices: {
         Row: {
-          audio_url: string
+          api_speaker_id: string | null
+          audio_storage_path: string | null
+          category: string
           created_at: string
+          creator_id: string
           description: string | null
-          duration: number | null
           id: string
           language: string
           name: string
+          reference_audio_id: string
           updated_at: string
-          user_id: string
-          voice_type: string
         }
         Insert: {
-          audio_url: string
+          api_speaker_id?: string | null
+          audio_storage_path?: string | null
+          category: string
           created_at?: string
+          creator_id: string
           description?: string | null
-          duration?: number | null
           id?: string
           language: string
           name: string
+          reference_audio_id: string
           updated_at?: string
-          user_id: string
-          voice_type: string
         }
         Update: {
-          audio_url?: string
+          api_speaker_id?: string | null
+          audio_storage_path?: string | null
+          category?: string
           created_at?: string
+          creator_id?: string
           description?: string | null
-          duration?: number | null
           id?: string
           language?: string
           name?: string
+          reference_audio_id?: string
           updated_at?: string
-          user_id?: string
-          voice_type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "voices_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

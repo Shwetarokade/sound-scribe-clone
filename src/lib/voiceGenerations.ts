@@ -3,16 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 export async function getVoiceGenerationsByUser(userId: string) {
   try {
     const { data, error } = await supabase
-      .from('generated_voices')
+      .from('voice_generations')
       .select(`
         id,
         voice_id,
-        input_text,
+        text,
         audio_url,
         created_at,
-        speed,
-        pitch,
-        output_language
+        is_favorite,
+        duration_seconds,
+        name
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
