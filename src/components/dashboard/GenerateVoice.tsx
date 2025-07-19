@@ -33,7 +33,7 @@ interface Voice {
   id: string;
   name: string;
   language: string;
-  category: string;
+  voice_type: string;
   description?: string;
   external_voice_id?: string;
   provider?: string;
@@ -290,7 +290,7 @@ const GenerateVoice = () => {
     const { data: voicesData, error: voicesError } = await supabase
       .from('voices')
       .select('*')
-      .eq('creator_id', user.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (voicesError) {
@@ -306,10 +306,10 @@ const GenerateVoice = () => {
 
     // Fetch recent generations
     const { data: generationsData, error: generationsError } = await supabase
-      .from('voice_generations')
+      .from('generated_voices')
       .select(`
         *,
-        voices:voice_id (name, category)
+        voices:voice_id (name, voice_type)
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
@@ -500,16 +500,17 @@ const GenerateVoice = () => {
       const mockAudioUrl = "mock-audio-url-generated";
       setGeneratedAudio(mockAudioUrl);
 
-      // Save to voice_generations table
+      // Save to generated_voices table
       const { error: saveError } = await supabase
-        .from('voice_generations')
+        .from('generated_voices')
         .insert({
           user_id: user?.id,
-          text: textToGenerate,
+          input_text: textToGenerate,
           voice_id: selectedVoice,
-          audio_url: mockAudioUrl,
-          name: textToGenerate.substring(0, 50) + (textToGenerate.length > 50 ? '...' : ''),
-          is_favorite: false
+          output_language: outputLanguage,
+          speed: speed[0],
+          pitch: pitch[0],
+          audio_url: mockAudioUrl
         });
 
       if (saveError) {
@@ -517,10 +518,10 @@ const GenerateVoice = () => {
       } else {
         // Refresh recent generations
         const { data: generationsData } = await supabase
-          .from('voice_generations')
+          .from('generated_voices')
           .select(`
             *,
-            voices:voice_id (name, category)
+            voices:voice_id (name, voice_type)
           `)
           .eq('user_id', user?.id)
           .order('created_at', { ascending: false })
@@ -779,7 +780,7 @@ const GenerateVoice = () => {
                               )}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {voice.category} • {voice.language.toUpperCase()}
+                              {voice.voice_type} • {voice.language.toUpperCase()}
                             </span>
                           </div>
                         </SelectItem>
@@ -1079,9 +1080,9 @@ const GenerateVoice = () => {
               {recentGenerations.map((generation) => (
                 <div key={generation.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <div className="flex-1">
-                    <p className="text-sm font-medium truncate">{generation.text.substring(0, 50)}...</p>
+                    <p className="text-sm font-medium truncate">{generation.input_text.substring(0, 50)}...</p>
                     <p className="text-xs text-muted-foreground">
-                      {generation.voices?.name} • {generation.voices?.category} • {new Date(generation.created_at).toLocaleDateString()}
+                      {generation.voices?.name} • {generation.voices?.voice_type} • {generation.output_language.toUpperCase()} • {new Date(generation.created_at).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">

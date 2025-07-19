@@ -416,14 +416,13 @@ const AddVoice = () => {
           const { data: insertedData, error: dbError } = await supabase
             .from('voices')
             .insert({
-              creator_id: user.id,
+              user_id: user.id,
               name: formData.name,
               language: formData.language,
-              category: formData.voice_type,
+              voice_type: formData.voice_type,
               description: formData.description || null,
-              reference_audio_id: audioUrl,
-              audio_storage_path: audioUrl,
-              api_speaker_id: null
+              audio_url: audioUrl,
+              duration: Math.round(audioData.trimEnd - audioData.trimStart)
             })
             .select()
             .single();

@@ -14,9 +14,9 @@ interface Voice {
   id: string;
   name: string;
   language: string;
-  category: string;
+  voice_type: string;
   description?: string;
-  audio_storage_path: string;
+  audio_url: string;
   duration?: number;
   created_at: string;
 }
@@ -67,7 +67,7 @@ const VoiceLibrary = () => {
       const { data, error } = await supabase
         .from('voices')
         .select('*')
-        .eq('creator_id', user.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -111,7 +111,7 @@ const VoiceLibrary = () => {
         supabase
           .from('voices')
           .select('*')
-          .eq('creator_id', user.id)
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .then(({ data }) => {
             if (data) setVoices(data);
@@ -144,7 +144,7 @@ const VoiceLibrary = () => {
           event: 'INSERT',
           schema: 'public',
           table: 'voices',
-          filter: `creator_id=eq.${user.id}`
+          filter: `user_id=eq.${user.id}`
         },
         (payload) => {
           console.log('New voice added via Supabase:', payload.new);
@@ -168,10 +168,10 @@ const VoiceLibrary = () => {
   const filteredVoices = voices.filter(voice => {
     const matchesSearch = voice.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       voice.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      voice.category.toLowerCase().includes(searchTerm.toLowerCase());
+      voice.voice_type.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesLanguage = languageFilter === "all" || voice.language === languageFilter;
-    const matchesVoiceType = voiceTypeFilter === "all" || voice.category === voiceTypeFilter;
+    const matchesVoiceType = voiceTypeFilter === "all" || voice.voice_type === voiceTypeFilter;
     
     return matchesSearch && matchesLanguage && matchesVoiceType;
   });
@@ -422,8 +422,8 @@ const VoiceLibrary = () => {
                       </CardDescription>
                     )}
                   </div>
-                  <Badge variant={getVoiceTypeBadgeVariant(voice.category)}>
-                    {voice.category}
+                  <Badge variant={getVoiceTypeBadgeVariant(voice.voice_type)}>
+                    {voice.voice_type}
                   </Badge>
                 </div>
               </CardHeader>
@@ -449,7 +449,7 @@ const VoiceLibrary = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handlePlayPause(voice.id, voice.audio_storage_path)}
+                      onClick={() => handlePlayPause(voice.id, voice.audio_url)}
                       className={`min-w-[48px] min-h-[48px] ${playingVoice === voice.id ? 'bg-primary/20 border-primary' : ''}`}
                     >
                       {playingVoice === voice.id ? (
@@ -461,7 +461,7 @@ const VoiceLibrary = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDownload(voice.audio_storage_path, voice.name)}
+                      onClick={() => handleDownload(voice.audio_url, voice.name)}
                       className="min-w-[48px] min-h-[48px]"
                     >
                       <Download className="h-4 w-4" />
@@ -469,7 +469,7 @@ const VoiceLibrary = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDelete(voice.id, voice.audio_storage_path)}
+                      onClick={() => handleDelete(voice.id, voice.audio_url)}
                       className="min-w-[48px] min-h-[48px]"
                     >
                       <Trash2 className="h-4 w-4" />

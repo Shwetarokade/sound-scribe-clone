@@ -49,7 +49,7 @@ router.post('/generate-speech', async (req, res) => {
       id: uuidv4(),
       user_id,
       voice_id: voice_id || null,
-      text: text,
+      input_text: text,
       audio_url: audioUrl,
       is_favorite: false,
       duration_seconds: durationSeconds,
