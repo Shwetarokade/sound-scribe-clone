@@ -14,7 +14,7 @@ export const useWaveformRecorder = (onAudioReady: (file: File, trimStart: number
   const [duration, setDuration] = useState(0);
   
   const wavesurferRef = useRef<WaveSurfer | null>(null);
-  const recordPluginRef = useRef<any>(null);
+  const recordPluginRef = useRef<ReturnType<typeof RecordPlugin.create> | null>(null);
   const trimManagerRef = useRef<TrimRegionManager | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioUrlRef = useRef<string | null>(null);

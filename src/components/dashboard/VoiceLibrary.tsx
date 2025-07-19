@@ -89,19 +89,19 @@ const VoiceLibrary = () => {
   // Separate useEffect for optimistic updates
   useEffect(() => {
     // Listen for optimistic voice updates
-    const handleVoiceAdded = (event: any) => {
+    const handleVoiceAdded = (event: CustomEvent) => {
       const newVoice = event.detail;
       setVoices(prev => [newVoice, ...prev]);
     };
 
-    const handleVoiceAddedSuccess = (event: any) => {
+    const handleVoiceAddedSuccess = (event: CustomEvent) => {
       const { tempId, realVoice } = event.detail;
       setVoices(prev => prev.map(voice => 
         voice.id === tempId ? realVoice : voice
       ));
     };
 
-    const handleVoiceAddedError = (event: any) => {
+    const handleVoiceAddedError = (event: CustomEvent) => {
       const { tempId } = event.detail;
       setVoices(prev => prev.filter(voice => voice.id !== tempId));
     };
@@ -252,10 +252,10 @@ const VoiceLibrary = () => {
         title: "Success",
         description: "Voice deleted successfully.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete voice.",
+        description: (error as Error).message || "Failed to delete voice.",
         variant: "destructive"
       });
     }
