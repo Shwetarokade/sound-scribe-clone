@@ -74,7 +74,7 @@ const GenerateVoice = () => {
   const [generatedAudio, setGeneratedAudio] = useState<string | null>(null);
   const [transliteratedText, setTransliteratedText] = useState("");
   const [isTransliterating, setIsTransliterating] = useState(false);
-  const [recentGenerations, setRecentGenerations] = useState<any[]>([]);
+  const [recentGenerations, setRecentGenerations] = useState<unknown[]>([]);
 
   // Voice cloning states
   const [isCloning, setIsCloning] = useState(false);
@@ -84,7 +84,7 @@ const GenerateVoice = () => {
   const [voiceDescription, setVoiceDescription] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
-  const [usage, setUsage] = useState<any>(null);
+  const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
 
   // Voice settings for cloning
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
@@ -244,7 +244,7 @@ const GenerateVoice = () => {
       // Refresh voices list
       await Promise.all([loadClonedVoices(), fetchData()]);
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Voice cloning error:', error);
       toast({
         title: "Voice cloning failed",
@@ -263,9 +263,9 @@ const GenerateVoice = () => {
       const response = await fetch('/api/voices?user_id=' + user?.id);
       if (response.ok) {
         const data = await response.json();
-        setClonedVoices(data.data.filter((v: any) => v.provider === 'elevenlabs'));
+        setClonedVoices(data.data.filter((v: { provider: string }) => v.provider === 'elevenlabs'));
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error loading cloned voices:', error);
     }
   };
@@ -278,7 +278,7 @@ const GenerateVoice = () => {
         const data = await response.json();
         setUsage(data.data);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error loading usage:', error);
     }
   };
@@ -361,7 +361,7 @@ const GenerateVoice = () => {
       } else {
         throw new Error('Transliteration API failed');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Transliteration error:', error);
       // Enhanced fallback transliteration
       const fallbackTransliterated = enhancedMockTransliterate(inputText, targetLanguage);
@@ -533,10 +533,10 @@ const GenerateVoice = () => {
         description: `Voice generated successfully using ${selectedVoiceData?.name}.`,
       });
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to generate voice. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate voice. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -584,7 +584,7 @@ const GenerateVoice = () => {
         description: "Your audio is ready to play and download",
       });
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Speech generation error:', error);
       toast({
         title: "Speech generation failed",
@@ -635,7 +635,7 @@ const GenerateVoice = () => {
         title: "Download complete! 📁",
         description: `Generated audio saved as ${fileName}`,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Download error:', error);
       toast({
         title: "Download failed",

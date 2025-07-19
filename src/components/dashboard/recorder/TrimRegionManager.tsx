@@ -2,14 +2,14 @@
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 
 export class TrimRegionManager {
-  private regionsPlugin: any;
+  private regionsPlugin: ReturnType<typeof RegionsPlugin.create>;
   private onRegionUpdate: (region: { start: number; end: number }) => void;
 
   constructor(onRegionUpdate: (region: { start: number; end: number }) => void) {
     this.onRegionUpdate = onRegionUpdate;
     this.regionsPlugin = RegionsPlugin.create();
     
-    this.regionsPlugin.on('region-updated', (region: any) => {
+    this.regionsPlugin.on('region-updated', (region: { start: number; end: number }) => {
       this.onRegionUpdate({ start: region.start, end: region.end });
     });
   }

@@ -19,7 +19,7 @@ const AddVoice = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [cachedVoices, setCachedVoices] = useState<any[]>([]);
+  const [cachedVoices, setCachedVoices] = useState<VoiceFormData[]>([]);
   const [retryAttempts, setRetryAttempts] = useState(0);
   const [audioData, setAudioData] = useState<{
     file: File;
@@ -252,7 +252,7 @@ const AddVoice = () => {
   const createTrimmedAudio = async (file: File, trimStart: number, trimEnd: number): Promise<File> => {
     return new Promise((resolve, reject) => {
       const audio = new Audio();
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       
       audio.onload = async () => {
         try {
@@ -457,14 +457,14 @@ const AddVoice = () => {
 
           console.log('Voice saved successfully to database');
           
-        } catch (backgroundError: any) {
+        } catch (backgroundError: unknown) {
           console.error('Background upload error:', backgroundError);
           
           // Remove optimistic update and show error
           window.dispatchEvent(new CustomEvent('voiceAddedError', { 
             detail: { 
               tempId: optimisticVoice.id,
-              error: backgroundError.message 
+              error: (backgroundError as Error).message 
             }
           }));
           
@@ -476,11 +476,11 @@ const AddVoice = () => {
         }
       }, 100); // Small delay to ensure UI updates first
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Form submission error:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to add voice. Please try again.",
+        description: (error as Error).message || "Failed to add voice. Please try again.",
         variant: "destructive"
       });
       setLoading(false);
