@@ -352,6 +352,7 @@ const GenerateVoice = () => {
         throw new Error('Failed to generate voice');
       }
       const data = await response.json();
+      console.log('Generate API response:', data); // <-- Debug log for user
       const returnedAssertId = data.assert_id || data.asset_id || data.id; // adapt to actual response
       setAssertId(returnedAssertId);
       const audioUrl = `https://fvvifdcldpfrfseybfrs.supabase.co/functions/v1/voice-proxy/voice/download/${returnedAssertId}`;
