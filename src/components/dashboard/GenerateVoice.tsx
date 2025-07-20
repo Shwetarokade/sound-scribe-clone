@@ -87,6 +87,9 @@ const GenerateVoice = () => {
   const [recentGenerations, setRecentGenerations] = useState<VoiceGeneration[]>([]);
   const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null);
   const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
+  // Add state for file_id and assert_id
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [assertId, setAssertId] = useState<string | null>(null);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +135,8 @@ const GenerateVoice = () => {
       if (file.type.startsWith('audio/')) {
         setUploadedAudioFile(file);
         setUploadedAudioUrl(URL.createObjectURL(file));
+        // Use file name (without extension) as file_id for now
+        setFileId(file.name.replace(/\.[^/.]+$/, ''));
         toast({
           title: "Audio file selected",
           description: `Selected ${file.name}`,
@@ -323,81 +328,37 @@ const GenerateVoice = () => {
 
   // Generate speech function
   const handleGenerate = async () => {
-    if (!selectedVoice || (!text.trim() && !uploadedAudioFile)) {
+    if (!fileId || !text.trim() || !outputLanguage) {
       toast({
         title: "Missing information",
-        description: "Please select a voice and enter text or upload an audio file.",
+        description: "Please upload an audio file, enter text, and select a language.",
         variant: "destructive"
       });
       return;
     }
-
     setIsGenerating(true);
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-      if (!profile) throw new Error('Profile not found');
-
-      let audioUrl = null;
-      let duration = 0;
-      
-      if (uploadedAudioFile) {
-        const fileExt = uploadedAudioFile.name.split('.').pop();
-        const fileName = `voicegen_${Date.now()}.${fileExt}`;
-        const { data, error } = await supabase.storage
-          .from('voice-uploads')
-          .upload(`${profile.id}/${fileName}`, uploadedAudioFile, { upsert: true });
-        if (error) throw new Error('Failed to upload audio file');
-        
-        const { data: publicUrlData } = supabase.storage
-          .from('voice-uploads')
-          .getPublicUrl(`${profile.id}/${fileName}`);
-        audioUrl = publicUrlData.publicUrl;
-        
-        const audio = new Audio(URL.createObjectURL(uploadedAudioFile));
-        await new Promise((resolve) => {
-          audio.onloadedmetadata = () => {
-            duration = Math.round(audio.duration);
-            resolve(null);
-          };
-        });
+      // Call the Supabase Edge Function for generation
+      const response = await fetch('https://fvvifdcldpfrfseybfrs.supabase.co/functions/v1/voice-proxy/voice/audio/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_id: fileId,
+          text: text,
+          lang_id: outputLanguage
+        })
+      });
+      if (!response.ok) {
+        throw new Error('Failed to generate voice');
       }
-
-      let generatedAudioUrl = audioUrl;
-      if (text.trim()) {
-        generatedAudioUrl = `https://example.com/generated-audio-${Date.now()}.mp3`;
-        duration = Math.floor(text.length / 10);
-      }
-      setGeneratedAudio(generatedAudioUrl);
-
-      const { error: saveError } = await supabase
-        .from('voice_generations')
-        .insert({
-          user_id: profile.id,
-          name: `VoiceGen_${Date.now()}`,
-          text,
-          voice_id: selectedVoice,
-          audio_url: generatedAudioUrl,
-          duration_seconds: duration
-        });
-
-      if (saveError) {
-        console.error('Error saving generation:', saveError);
-        toast({
-          title: "Warning",
-          description: "Audio generated but couldn't save to history.",
-          variant: "destructive"
-        });
-      } else {
-        await fetchData();
-      }
-      
+      const data = await response.json();
+      const returnedAssertId = data.assert_id || data.asset_id || data.id; // adapt to actual response
+      setAssertId(returnedAssertId);
+      const audioUrl = `https://fvvifdcldpfrfseybfrs.supabase.co/functions/v1/voice-proxy/voice/download/${returnedAssertId}`;
+      setGeneratedAudio(audioUrl);
       toast({
         title: "Success!",
-        description: `Voice generated successfully using your input.`,
+        description: `Voice generated successfully.`,
       });
     } catch (error: unknown) {
       toast({
@@ -650,7 +611,7 @@ const GenerateVoice = () => {
           <Button 
             onClick={handleGenerate}
             className="w-full h-12 text-lg"
-            disabled={isGenerating || !selectedVoice || (!text.trim() && !uploadedAudioFile)}
+            disabled={isGenerating || !fileId || !text.trim() || !outputLanguage}
           >
             {isGenerating ? (
               <>
