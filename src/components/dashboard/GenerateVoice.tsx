@@ -60,7 +60,6 @@ const GenerateVoice = () => {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState("");
   const [text, setText] = useState("");
-  const [generationName, setGenerationName] = useState("");
   const [outputLanguage, setOutputLanguage] = useState("en-in");
   const [speed, setSpeed] = useState([1.0]);
   const [pitch, setPitch] = useState([1.0]);
@@ -71,24 +70,28 @@ const GenerateVoice = () => {
   const [isTransliterating, setIsTransliterating] = useState(false);
   const [recentGenerations, setRecentGenerations] = useState<VoiceGeneration[]>([]);
 
-  // Voice cloning states
-  const [isCloning, setIsCloning] = useState(false);
-  const [cloneProgress, setCloneProgress] = useState(0);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [newVoiceName, setNewVoiceName] = useState("");
-  const [newVoiceDescription, setNewVoiceDescription] = useState("");
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
-  const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
+  // 1. Remove generationName state and all references to it
+  // const [generationName, setGenerationName] = useState("");
 
-  // Voice settings for cloning
-  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
-    stability: 0.5,
-    similarity_boost: 0.8,
-    style: 0.0,
-    use_speaker_boost: true,
-    model_id: 'eleven_multilingual_v2'
-  });
+  // 2. Remove all clone voice states and UI
+  // const [isCloning, setIsCloning] = useState(false);
+  // const [cloneProgress, setCloneProgress] = useState(0);
+  // const [newVoiceName, setNewVoiceName] = useState("");
+  // const [newVoiceDescription, setNewVoiceDescription] = useState("");
+  // const [isDragOver, setIsDragOver] = useState(false);
+  // const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
+  // const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
+  // const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
+  //   stability: 0.5,
+  //   similarity_boost: 0.8,
+  //   style: 0.0,
+  //   use_speaker_boost: true,
+  //   model_id: 'eleven_multilingual_v2'
+  // });
+
+  // 3. Add state for uploaded audio file for generation
+  const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null);
+  const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,29 +140,29 @@ const GenerateVoice = () => {
       return;
     }
     
-    setSelectedFile(file);
+    // setSelectedFile(file); // This state is no longer needed for cloning
   }, [toast]);
 
   // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(true);
+    // setIsDragOver(true); // This state is no longer needed for cloning
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    // setIsDragOver(false); // This state is no longer needed for cloning
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    // setIsDragOver(false); // This state is no longer needed for cloning
     handleFileSelect(e.dataTransfer.files);
   }, [handleFileSelect]);
 
   // Clone voice function
   const cloneVoice = async () => {
-    if (!selectedFile || !newVoiceName.trim() || !user) {
+    if (!uploadedAudioFile || !newVoiceName.trim() || !user) {
       toast({
         title: "Missing information",
         description: "Please select an audio file and enter a voice name",
@@ -168,8 +171,8 @@ const GenerateVoice = () => {
       return;
     }
 
-    setIsCloning(true);
-    setCloneProgress(0);
+    // setIsCloning(true); // This state is no longer needed for cloning
+    // setCloneProgress(0); // This state is no longer needed for cloning
 
     try {
       // Get user profile
@@ -185,7 +188,7 @@ const GenerateVoice = () => {
 
       // Simulate progress
       const progressInterval = setInterval(() => {
-        setCloneProgress(prev => Math.min(prev + 10, 90));
+        // setCloneProgress(prev => Math.min(prev + 10, 90)); // This state is no longer needed for cloning
       }, 500);
 
       // Mock voice cloning - in production, this would upload the file and use an AI service
@@ -210,7 +213,7 @@ const GenerateVoice = () => {
         .single();
 
       clearInterval(progressInterval);
-      setCloneProgress(100);
+      // setCloneProgress(100); // This state is no longer needed for cloning
 
       if (insertError) {
         throw new Error(insertError.message);
@@ -222,11 +225,11 @@ const GenerateVoice = () => {
       });
 
       // Reset form
-      setSelectedFile(null);
+      // setSelectedFile(null); // This state is no longer needed for cloning
       setNewVoiceName("");
       setNewVoiceDescription("");
-      setCloneProgress(0);
-      setShowCloneForm(false);
+      // setCloneProgress(0); // This state is no longer needed for cloning
+      // setShowCloneForm(false); // This state is no longer needed for cloning
       
       // Refresh voices list
       await fetchData();
@@ -239,8 +242,8 @@ const GenerateVoice = () => {
         variant: "destructive"
       });
     } finally {
-      setIsCloning(false);
-      setCloneProgress(0);
+      // setIsCloning(false); // This state is no longer needed for cloning
+      // setCloneProgress(0); // This state is no longer needed for cloning
     }
   };
 
@@ -422,11 +425,18 @@ const GenerateVoice = () => {
     return () => clearTimeout(timeoutId);
   }, [text, outputLanguage]);
 
-  // Handle file upload for text input
+  // 4. Update handleFileUpload to handle audio files for voice generation
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      if (file.type.startsWith('audio/')) {
+        setUploadedAudioFile(file);
+        setUploadedAudioUrl(URL.createObjectURL(file));
+        toast({
+          title: "Audio file selected",
+          description: `Selected ${file.name}`,
+        });
+      } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
         const reader = new FileReader();
         reader.onload = (e) => {
           const content = e.target?.result as string;
@@ -446,7 +456,7 @@ const GenerateVoice = () => {
       } else {
         toast({
           title: "Invalid File",
-          description: "Please upload a TXT or PDF file.",
+          description: "Please upload a TXT, PDF, or audio file.",
           variant: "destructive"
         });
       }
@@ -511,17 +521,16 @@ const GenerateVoice = () => {
 
   // Generate speech function
   const handleGenerate = async () => {
-    if (!selectedVoice || !text.trim() || !generationName.trim()) {
+    if (!selectedVoice || (!text.trim() && !uploadedAudioFile)) {
       toast({
         title: "Missing information",
-        description: "Please select a voice, enter text, and provide a name for the generation.",
+        description: "Please select a voice and enter text or upload an audio file.",
         variant: "destructive"
       });
       return;
     }
 
     setIsGenerating(true);
-    
     try {
       // Get user profile
       const { data: profile } = await supabase
@@ -529,44 +538,53 @@ const GenerateVoice = () => {
         .select('id')
         .eq('user_id', user.id)
         .single();
+      if (!profile) throw new Error('Profile not found');
 
-      if (!profile) {
-        throw new Error('Profile not found');
+      let audioUrl = null;
+      let duration = 0;
+      // If audio file is uploaded, upload to Supabase Storage
+      if (uploadedAudioFile) {
+        const fileExt = uploadedAudioFile.name.split('.').pop();
+        const fileName = `voicegen_${Date.now()}.${fileExt}`;
+        const { data, error } = await supabase.storage
+          .from('voice-uploads')
+          .upload(`${profile.id}/${fileName}`, uploadedAudioFile, { upsert: true });
+        if (error) throw new Error('Failed to upload audio file');
+        // Get public URL
+        const { data: publicUrlData } = supabase.storage
+          .from('voice-uploads')
+          .getPublicUrl(`${profile.id}/${fileName}`);
+        audioUrl = publicUrlData.publicUrl;
+        // Optionally, get duration using Audio API
+        const audio = new Audio(URL.createObjectURL(uploadedAudioFile));
+        await new Promise((resolve) => {
+          audio.onloadedmetadata = () => {
+            duration = Math.round(audio.duration);
+            resolve(null);
+          };
+        });
       }
 
-      // Find selected voice details
-      const selectedVoiceData = voices.find(v => v.id === selectedVoice);
-      
-      console.log("Generating voice:", {
-        voiceId: selectedVoice,
-        voiceName: selectedVoiceData?.name,
-        text,
-        outputLanguage,
-        speed: speed[0],
-        pitch: pitch[0]
-      });
-
-      // Simulate generation process with realistic timing
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Mock generated audio URL (in production, this would call your voice generation API)
-      const mockAudioUrl = `https://example.com/generated-audio-${Date.now()}.mp3`;
-      const mockDuration = Math.floor(text.length / 10); // Estimate duration based on text length
-      
-      setGeneratedAudio(mockAudioUrl);
+      // If text is provided, simulate TTS and save
+      let generatedAudioUrl = audioUrl;
+      if (text.trim()) {
+        // Simulate TTS API call and get a mock URL
+        generatedAudioUrl = `https://example.com/generated-audio-${Date.now()}.mp3`;
+        duration = Math.floor(text.length / 10);
+      }
+      setGeneratedAudio(generatedAudioUrl);
 
       // Save to voice_generations table
       const { error: saveError } = await supabase
         .from('voice_generations')
         .insert({
           user_id: profile.id,
-          name: generationName.trim(),
+          name: `VoiceGen_${Date.now()}`,
           text,
           voice_id: selectedVoice,
-          audio_url: mockAudioUrl,
-          duration_seconds: mockDuration
+          audio_url: generatedAudioUrl,
+          duration_seconds: duration
         });
-
       if (saveError) {
         console.error('Error saving generation:', saveError);
         toast({
@@ -575,15 +593,12 @@ const GenerateVoice = () => {
           variant: "destructive"
         });
       } else {
-        // Refresh recent generations
         await fetchData();
       }
-      
       toast({
         title: "Success!",
-        description: `Voice generated successfully using ${selectedVoiceData?.name}.`,
+        description: `Voice generated successfully using your input.`,
       });
-      
     } catch (error: unknown) {
       toast({
         title: "Error",
@@ -724,7 +739,7 @@ const GenerateVoice = () => {
               <label className="cursor-pointer">
                 <input
                   type="file"
-                  accept=".txt,.pdf"
+                  accept=".txt,.pdf,audio/*"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -733,7 +748,7 @@ const GenerateVoice = () => {
                   Upload File
                 </Button>
               </label>
-              <span className="text-xs text-muted-foreground">TXT or PDF</span>
+              <span className="text-xs text-muted-foreground">TXT, PDF, or Audio</span>
             </div>
             
             <div className="space-y-2">
@@ -751,16 +766,6 @@ const GenerateVoice = () => {
               </div>
             </div>
 
-            {/* Generation Name */}
-            <div className="space-y-2">
-              <Label htmlFor="generationName">Generation Name *</Label>
-              <Input
-                id="generationName"
-                placeholder="e.g., My Speech Recording"
-                value={generationName}
-                onChange={(e) => setGenerationName(e.target.value)}
-              />
-            </div>
             {/* Transliteration Panel (always visible) */}
             <div className="mt-4 p-3 bg-muted/50 rounded-lg">
               <div className="flex items-center justify-between mb-2">
@@ -814,7 +819,8 @@ const GenerateVoice = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Select Voice</Label>
-                <Button
+                {/* 2. Remove all clone voice states and UI */}
+                {/* <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowCloneForm(!showCloneForm)}
@@ -822,7 +828,7 @@ const GenerateVoice = () => {
                 >
                   <Mic className="h-3 w-3 mr-1" />
                   Clone Voice
-                </Button>
+                </Button> */}
               </div>
               <Select value={selectedVoice} onValueChange={setSelectedVoice}>
                 <SelectTrigger>
@@ -899,7 +905,8 @@ const GenerateVoice = () => {
       </div>
 
       {/* Clone Voice Form (Conditional) */}
-      {showCloneForm && (
+      {/* 2. Remove all clone voice states and UI */}
+      {/* {showCloneForm && (
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -912,7 +919,7 @@ const GenerateVoice = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* File Upload Area */}
-            <div
+            {/* <div
               ref={dropRef}
               className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                 isDragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
@@ -961,7 +968,7 @@ const GenerateVoice = () => {
             </div>
 
             {/* Voice Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="newVoiceName">Voice Name *</Label>
                 <Input
@@ -996,7 +1003,7 @@ const GenerateVoice = () => {
             )}
 
             {/* Clone Button */}
-            <div className="flex gap-2">
+            {/* <div className="flex gap-2">
               <Button
                 onClick={cloneVoice}
                 disabled={isCloning || !selectedFile || !newVoiceName.trim()}
@@ -1024,7 +1031,7 @@ const GenerateVoice = () => {
             </div>
           </CardContent>
         </Card>
-      )}
+      )} */}
 
       {/* Generate Button */}
       <Card>
@@ -1032,7 +1039,7 @@ const GenerateVoice = () => {
           <Button 
             onClick={handleGenerate}
             className="w-full h-12 text-lg"
-            disabled={isGenerating || !selectedVoice || !text.trim() || !generationName.trim()}
+            disabled={isGenerating || !selectedVoice || (!text.trim() && !uploadedAudioFile)}
           >
             {isGenerating ? (
               <>
