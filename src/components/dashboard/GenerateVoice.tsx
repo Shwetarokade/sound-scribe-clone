@@ -484,12 +484,18 @@ const GenerateVoice = () => {
             <div className="flex items-center space-x-2 mb-4">
               <label className="cursor-pointer">
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept=".txt,.pdf,audio/*"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
-                <Button type="button" variant="outline" size="sm">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
                   <Upload className="h-4 w-4 mr-2" />
                   Upload File
                 </Button>
