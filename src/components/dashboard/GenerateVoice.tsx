@@ -19,7 +19,8 @@ import {
   Mic,
   Loader2,
   CheckCircle2,
-  Zap
+  Zap,
+  RefreshCw
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -66,13 +67,9 @@ const GenerateVoice = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<string | null>(null);
-<<<<<<< HEAD
   const [transliteratedText, setTransliteratedText] = useState("");
   const [isTransliterating, setIsTransliterating] = useState(false);
-  const [recentGenerations, setRecentGenerations] = useState<unknown[]>([]);
-=======
   const [recentGenerations, setRecentGenerations] = useState<VoiceGeneration[]>([]);
->>>>>>> main
 
   // Voice cloning states
   const [isCloning, setIsCloning] = useState(false);
@@ -81,7 +78,6 @@ const GenerateVoice = () => {
   const [newVoiceName, setNewVoiceName] = useState("");
   const [newVoiceDescription, setNewVoiceDescription] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
-<<<<<<< HEAD
   const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
   const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
 
@@ -93,9 +89,6 @@ const GenerateVoice = () => {
     use_speaker_boost: true,
     model_id: 'eleven_multilingual_v2'
   });
-=======
-  const [showCloneForm, setShowCloneForm] = useState(false);
->>>>>>> main
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -251,7 +244,6 @@ const GenerateVoice = () => {
     }
   };
 
-<<<<<<< HEAD
   // Load cloned voices
   const loadClonedVoices = async () => {
     try {
@@ -430,9 +422,7 @@ const GenerateVoice = () => {
     return () => clearTimeout(timeoutId);
   }, [text, outputLanguage]);
 
-=======
   // Handle file upload for text input
->>>>>>> main
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -598,7 +588,6 @@ const GenerateVoice = () => {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to generate voice. Please try again.",
-<<<<<<< HEAD
         variant: "destructive"
       });
     } finally {
@@ -651,8 +640,6 @@ const GenerateVoice = () => {
       toast({
         title: "Speech generation failed",
         description: error instanceof Error ? error.message : "An unexpected error occurred",
-=======
->>>>>>> main
         variant: "destructive"
       });
     } finally {
@@ -719,230 +706,6 @@ const GenerateVoice = () => {
         </p>
       </div>
 
-<<<<<<< HEAD
-      <Tabs defaultValue="generate" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="generate">Generate Speech</TabsTrigger>
-          <TabsTrigger value="clone" className="flex items-center gap-2">
-            <Brain className="h-4 w-4" />
-            Clone Voice
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Speech Generation Tab */}
-        <TabsContent value="generate" className="space-y-6">
-          {/* Input Section */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Left: Text Input + Transliteration */}
-            <div className="flex flex-col gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Text to Speech</CardTitle>
-                  <CardDescription>
-                    Enter text or upload a file to convert to speech in Indian languages
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept=".txt,.pdf"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                      <Button type="button" variant="outline" size="sm">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload File
-                      </Button>
-                    </label>
-                    <span className="text-xs text-muted-foreground">TXT or PDF</span>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="text">Text Content</Label>
-                    <Textarea
-                      id="text"
-                      placeholder="Enter your text here or upload a file..."
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      rows={8}
-                      className="resize-none"
-                    />
-                    <div className="text-xs text-muted-foreground text-right">
-                      {text.length} characters
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              {/* Transliteration Panel (always visible) */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Transliteration (Google API)</CardTitle>
-                  <CardDescription>
-                    See how your text will be pronounced in the selected language. Powered by Google Input Tools API.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-sm font-semibold">Transliterated Output</Label>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => transliterateWithGoogle(text, outputLanguage)}
-                      disabled={isTransliterating}
-                      className="h-6 px-2"
-                    >
-                      <RefreshCw className={`h-3 w-3 ${isTransliterating ? 'animate-spin' : ''}`} />
-                    </Button>
-                  </div>
-                  <div className="text-sm text-muted-foreground min-h-[60px] p-2 bg-background rounded border">
-                    {isTransliterating ? (
-                      <div className="flex items-center justify-center">
-                        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-                        Transliterating with Google API...
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="font-medium">{transliteratedText || "Enter text to see transliteration"}</div>
-                        {transliteratedText && (
-                          <div className="text-xs text-blue-600">
-                            ✓ Ready for voice generation
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Auto-transliteration enabled • Click refresh to manually update
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-            {/* Right: Metadata Form */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Voice Settings</CardTitle>
-                <CardDescription>
-                  Configure voice parameters and quality
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label>Select Voice</Label>
-                  <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose from your voice library" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {voices.map((voice) => (
-                        <SelectItem key={voice.id} value={voice.external_voice_id || voice.id}>
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-2">
-                              {voice.name}
-                              {voice.provider && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {voice.provider}
-                                </Badge>
-                              )}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {voice.category} • {voice.language.toUpperCase()}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                      {clonedVoices.map((voice) => (
-                        <SelectItem key={voice.id} value={voice.external_voice_id}>
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-2">
-                              {voice.name}
-                              <Badge variant="secondary" className="text-xs">
-                                cloned
-                              </Badge>
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {voice.description}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {voices.length === 0 && clonedVoices.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      No voices found. Add voices in the "Add Voice" tab or clone a voice first.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Output Language</Label>
-                  <Select value={outputLanguage} onValueChange={setOutputLanguage}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {indianLanguages.map((lang) => (
-                        <SelectItem key={lang.value} value={lang.value}>
-                          {lang.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-3">
-                  <Label>Speed: {speed[0].toFixed(1)}x</Label>
-                  <Slider
-                    value={speed}
-                    onValueChange={setSpeed}
-                    max={2}
-                    min={0.5}
-                    step={0.1}
-                    className="w-full"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <Label>Pitch: {pitch[0].toFixed(1)}x</Label>
-                  <Slider
-                    value={pitch}
-                    onValueChange={setPitch}
-                    max={2}
-                    min={0.5}
-                    step={0.1}
-                    className="w-full"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tone</Label>
-                  <Select value={tone} onValueChange={setTone}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tones.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button 
-                  onClick={handleGenerate}
-                  className="w-full"
-                  disabled={isGenerating || !selectedVoice || !text.trim()}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 className="h-4 w-4 mr-2" />
-                      Generate Speech
-                    </>
-                  )}
-=======
       {/* Main Content */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Text Input Section */}
@@ -968,7 +731,6 @@ const GenerateVoice = () => {
                 <Button type="button" variant="outline" size="sm">
                   <Upload className="h-4 w-4 mr-2" />
                   Upload File
->>>>>>> main
                 </Button>
               </label>
               <span className="text-xs text-muted-foreground">TXT or PDF</span>
@@ -998,6 +760,41 @@ const GenerateVoice = () => {
                 value={generationName}
                 onChange={(e) => setGenerationName(e.target.value)}
               />
+            </div>
+            {/* Transliteration Panel (always visible) */}
+            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-semibold">Transliterated Output</Label>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => transliterateWithGoogle(text, outputLanguage)}
+                  disabled={isTransliterating}
+                  className="h-6 px-2"
+                >
+                  <RefreshCw className={`h-3 w-3 ${isTransliterating ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground min-h-[60px] p-2 bg-background rounded border">
+                {isTransliterating ? (
+                  <div className="flex items-center justify-center">
+                    <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                    Transliterating with Google API...
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="font-medium">{transliteratedText || "Enter text to see transliteration"}</div>
+                    {transliteratedText && (
+                      <div className="text-xs text-blue-600">
+                        ✓ Ready for voice generation
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Auto-transliteration enabled • Click refresh to manually update
+              </p>
             </div>
           </CardContent>
         </Card>
