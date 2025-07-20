@@ -352,10 +352,19 @@ const GenerateVoice = () => {
         throw new Error('Failed to generate voice');
       }
       const data = await response.json();
-      console.log('Generate API response:', data); // <-- Debug log for user
-      const returnedAssertId = data.assert_id || data.asset_id || data.id; // adapt to actual response
-      setAssertId(returnedAssertId);
+      console.log('Generate API response:', data);
+      const returnedAssertId = data.assert_id || data.asset_id || data.id;
+      if (!returnedAssertId) {
+        toast({
+          title: "Generation Error",
+          description: "No audio ID returned from backend. Please try again or check your input.",
+          variant: "destructive"
+        });
+        setGeneratedAudio(null);
+        return;
+      }
       const audioUrl = `https://fvvifdcldpfrfseybfrs.supabase.co/functions/v1/voice-proxy/voice/download/${returnedAssertId}`;
+      setAssertId(returnedAssertId);
       setGeneratedAudio(audioUrl);
       toast({
         title: "Success!",
