@@ -360,16 +360,14 @@ const AddVoice = () => {
       // Create optimistic voice object FIRST (before any async operations)
       const timestamp = Date.now();
       const optimisticVoice = {
-        id: `temp-${timestamp}`, 
-        user_id: user.id,
+        id: `temp-${timestamp}`,
         name: formData.name,
         language: formData.language,
-        voice_type: formData.voice_type,
+        category: formData.voice_type,
         description: formData.description || null,
-        audio_url: URL.createObjectURL(audioData.file), // Use original file for immediate preview
+        audio_storage_path: URL.createObjectURL(audioData.file), // Use original file for immediate preview
         duration: Math.round(audioData.trimEnd - audioData.trimStart),
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
       };
 
       // Immediately show in Voice Library (optimistic update)

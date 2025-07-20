@@ -66,7 +66,13 @@ const GenerateVoice = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [generatedAudio, setGeneratedAudio] = useState<string | null>(null);
+<<<<<<< HEAD
+  const [transliteratedText, setTransliteratedText] = useState("");
+  const [isTransliterating, setIsTransliterating] = useState(false);
+  const [recentGenerations, setRecentGenerations] = useState<unknown[]>([]);
+=======
   const [recentGenerations, setRecentGenerations] = useState<VoiceGeneration[]>([]);
+>>>>>>> main
 
   // Voice cloning states
   const [isCloning, setIsCloning] = useState(false);
@@ -75,7 +81,21 @@ const GenerateVoice = () => {
   const [newVoiceName, setNewVoiceName] = useState("");
   const [newVoiceDescription, setNewVoiceDescription] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+<<<<<<< HEAD
+  const [clonedVoices, setClonedVoices] = useState<ClonedVoice[]>([]);
+  const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
+
+  // Voice settings for cloning
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
+    stability: 0.5,
+    similarity_boost: 0.8,
+    style: 0.0,
+    use_speaker_boost: true,
+    model_id: 'eleven_multilingual_v2'
+  });
+=======
   const [showCloneForm, setShowCloneForm] = useState(false);
+>>>>>>> main
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -231,7 +251,188 @@ const GenerateVoice = () => {
     }
   };
 
+<<<<<<< HEAD
+  // Load cloned voices
+  const loadClonedVoices = async () => {
+    try {
+      const response = await fetch('/api/voices?user_id=' + user?.id);
+      if (response.ok) {
+        const data = await response.json();
+        setClonedVoices(data.data.filter((v: { provider: string }) => v.provider === 'elevenlabs'));
+      }
+    } catch (error: unknown) {
+      console.error('Error loading cloned voices:', error);
+    }
+  };
+
+  // Load usage info
+  const loadUsage = async () => {
+    try {
+      const response = await fetch('/api/voice-cloning/usage');
+      if (response.ok) {
+        const data = await response.json();
+        setUsage(data.data);
+      }
+    } catch (error: unknown) {
+      console.error('Error loading usage:', error);
+    }
+  };
+
+  // Fetch user's voices and recent generations from Supabase
+  const fetchData = async () => {
+    if (!user) return;
+
+    // Fetch voices
+    const { data: voicesData, error: voicesError } = await supabase
+      .from('voices')
+      .select('*')
+      .eq('creator_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (voicesError) {
+      console.error('Error fetching voices:', voicesError);
+      toast({
+        title: "Error",
+        description: "Failed to load your voices.",
+        variant: "destructive"
+      });
+    } else {
+      setVoices(voicesData || []);
+    }
+
+    // Fetch recent generations
+    const { data: generationsData, error: generationsError } = await supabase
+      .from('voice_generations')
+      .select(`
+        *,
+        voices:voice_id (name, category)
+      `)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (generationsError) {
+      console.error('Error fetching generations:', generationsError);
+    } else {
+      setRecentGenerations(generationsData || []);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      Promise.all([fetchData(), loadClonedVoices(), loadUsage()]);
+    }
+  }, [user, toast]);
+
+  // Enhanced Google Transliteration API integration
+  const transliterateWithGoogle = async (inputText: string, targetLanguage: string) => {
+    if (!inputText.trim() || targetLanguage === "en-in") {
+      setTransliteratedText(inputText);
+      return;
+    }
+
+    setIsTransliterating(true);
+    
+    try {
+      // Using Google Input Tools API for transliteration
+      const languageCode = languageMap[targetLanguage] || "hindi";
+      const response = await fetch(`https://inputtools.google.com/request?text=${encodeURIComponent(inputText)}&itc=${languageCode}-t-i0-pinyin&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8&app=demopage`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data[1] && data[1][0] && data[1][0][1] && data[1][0][1][0]) {
+          const transliterated = data[1][0][1][0];
+          setTransliteratedText(transliterated);
+          
+          toast({
+            title: "Transliteration complete",
+            description: `Text transliterated to ${indianLanguages.find(l => l.value === targetLanguage)?.label}`,
+          });
+        } else {
+          // Fallback to enhanced mock transliteration
+          const fallbackTransliterated = enhancedMockTransliterate(inputText, targetLanguage);
+          setTransliteratedText(fallbackTransliterated);
+        }
+      } else {
+        throw new Error('Transliteration API failed');
+      }
+    } catch (error: unknown) {
+      console.error('Transliteration error:', error);
+      // Enhanced fallback transliteration
+      const fallbackTransliterated = enhancedMockTransliterate(inputText, targetLanguage);
+      setTransliteratedText(fallbackTransliterated);
+      
+      toast({
+        title: "Using offline transliteration",
+        description: "Google transliteration unavailable, using local fallback",
+        variant: "destructive"
+      });
+    } finally {
+      setIsTransliterating(false);
+    }
+  };
+
+  // Enhanced mock transliteration with better language support
+  const enhancedMockTransliterate = (input: string, targetLang: string) => {
+    const transliterationMaps: { [key: string]: { [key: string]: string } } = {
+      "hi": { // Hindi
+        'a': 'अ', 'aa': 'आ', 'i': 'इ', 'ii': 'ई', 'u': 'उ', 'uu': 'ऊ',
+        'e': 'ए', 'ai': 'ऐ', 'o': 'ओ', 'au': 'औ',
+        'ka': 'क', 'kha': 'ख', 'ga': 'ग', 'gha': 'घ', 'nga': 'ङ',
+        'cha': 'च', 'chha': 'छ', 'ja': 'ज', 'jha': 'झ', 'nya': 'ञ',
+        'ta': 'त', 'tha': 'थ', 'da': 'द', 'dha': 'ध', 'na': 'न',
+        'pa': 'प', 'pha': 'फ', 'ba': 'ब', 'bha': 'भ', 'ma': 'म',
+        'ya': 'य', 'ra': 'र', 'la': 'ल', 'va': 'व', 'wa': 'व',
+        'sha': 'श', 'shha': 'ष', 'sa': 'स', 'ha': 'ह',
+        'k': 'क', 'g': 'ग', 'ch': 'च', 'j': 'ज', 't': 'त', 'd': 'द',
+        'p': 'प', 'b': 'ब', 'm': 'म', 'y': 'य', 'r': 'र', 'l': 'ल',
+        'v': 'व', 'w': 'व', 'sh': 'श', 's': 'स', 'h': 'ह', 'n': 'न'
+      },
+      "ta": { // Tamil
+        'a': 'அ', 'aa': 'ஆ', 'i': 'இ', 'ii': 'ஈ', 'u': 'உ', 'uu': 'ஊ',
+        'e': 'எ', 'ee': 'ஏ', 'ai': 'ஐ', 'o': 'ஒ', 'oo': 'ஓ', 'au': 'ஔ',
+        'ka': 'க', 'nga': 'ங', 'cha': 'ச', 'ja': 'ஜ', 'nya': 'ஞ',
+        'ta': 'ட', 'nna': 'ண', 'tha': 'த', 'nha': 'ந', 'pa': 'ப',
+        'ma': 'ம', 'ya': 'ய', 'ra': 'ர', 'la': 'ல', 'va': 'வ',
+        'zha': 'ழ', 'lla': 'ள', 'rra': 'ற', 'na': 'ன', 'sa': 'ஸ', 'ha': 'ஹ'
+      }
+    };
+
+    const map = transliterationMaps[targetLang] || transliterationMaps["hi"];
+    
+    // Simple word-based transliteration
+    return input.toLowerCase().split(' ').map(word => {
+      // Try to match longer patterns first
+      let result = word;
+      const sortedKeys = Object.keys(map).sort((a, b) => b.length - a.length);
+      
+      for (const key of sortedKeys) {
+        result = result.replace(new RegExp(key, 'g'), map[key]);
+      }
+      
+      // Handle remaining single characters
+      result = result.split('').map(char => map[char] || char).join('');
+      
+      return result;
+    }).join(' ');
+  };
+
+  // Real-time transliteration with debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (text.trim()) {
+        transliterateWithGoogle(text, outputLanguage);
+      } else {
+        setTransliteratedText("");
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [text, outputLanguage]);
+
+=======
   // Handle file upload for text input
+>>>>>>> main
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -397,6 +598,61 @@ const GenerateVoice = () => {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to generate voice. Please try again.",
+<<<<<<< HEAD
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Generate speech function for cloned voices
+  const generateSpeech = async () => {
+    if (!text.trim() || !selectedVoice) {
+      toast({
+        title: "Missing information",
+        description: "Please enter text and select a voice",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch('/api/voice-cloning/synthesize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: transliteratedText || text,
+          voice_id: selectedVoice,
+          options: voiceSettings,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.details || 'Failed to generate speech');
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      setGeneratedAudio(audioUrl);
+
+      toast({
+        title: "Speech generated successfully!",
+        description: "Your audio is ready to play and download",
+      });
+
+    } catch (error: unknown) {
+      console.error('Speech generation error:', error);
+      toast({
+        title: "Speech generation failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+=======
+>>>>>>> main
         variant: "destructive"
       });
     } finally {
@@ -463,6 +719,230 @@ const GenerateVoice = () => {
         </p>
       </div>
 
+<<<<<<< HEAD
+      <Tabs defaultValue="generate" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="generate">Generate Speech</TabsTrigger>
+          <TabsTrigger value="clone" className="flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            Clone Voice
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Speech Generation Tab */}
+        <TabsContent value="generate" className="space-y-6">
+          {/* Input Section */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Left: Text Input + Transliteration */}
+            <div className="flex flex-col gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Text to Speech</CardTitle>
+                  <CardDescription>
+                    Enter text or upload a file to convert to speech in Indian languages
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".txt,.pdf"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                      <Button type="button" variant="outline" size="sm">
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload File
+                      </Button>
+                    </label>
+                    <span className="text-xs text-muted-foreground">TXT or PDF</span>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="text">Text Content</Label>
+                    <Textarea
+                      id="text"
+                      placeholder="Enter your text here or upload a file..."
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      rows={8}
+                      className="resize-none"
+                    />
+                    <div className="text-xs text-muted-foreground text-right">
+                      {text.length} characters
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Transliteration Panel (always visible) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Transliteration (Google API)</CardTitle>
+                  <CardDescription>
+                    See how your text will be pronounced in the selected language. Powered by Google Input Tools API.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm font-semibold">Transliterated Output</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => transliterateWithGoogle(text, outputLanguage)}
+                      disabled={isTransliterating}
+                      className="h-6 px-2"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${isTransliterating ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
+                  <div className="text-sm text-muted-foreground min-h-[60px] p-2 bg-background rounded border">
+                    {isTransliterating ? (
+                      <div className="flex items-center justify-center">
+                        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                        Transliterating with Google API...
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="font-medium">{transliteratedText || "Enter text to see transliteration"}</div>
+                        {transliteratedText && (
+                          <div className="text-xs text-blue-600">
+                            ✓ Ready for voice generation
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Auto-transliteration enabled • Click refresh to manually update
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+            {/* Right: Metadata Form */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Voice Settings</CardTitle>
+                <CardDescription>
+                  Configure voice parameters and quality
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label>Select Voice</Label>
+                  <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose from your voice library" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {voices.map((voice) => (
+                        <SelectItem key={voice.id} value={voice.external_voice_id || voice.id}>
+                          <div className="flex flex-col">
+                            <span className="flex items-center gap-2">
+                              {voice.name}
+                              {voice.provider && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {voice.provider}
+                                </Badge>
+                              )}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {voice.category} • {voice.language.toUpperCase()}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      {clonedVoices.map((voice) => (
+                        <SelectItem key={voice.id} value={voice.external_voice_id}>
+                          <div className="flex flex-col">
+                            <span className="flex items-center gap-2">
+                              {voice.name}
+                              <Badge variant="secondary" className="text-xs">
+                                cloned
+                              </Badge>
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {voice.description}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {voices.length === 0 && clonedVoices.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No voices found. Add voices in the "Add Voice" tab or clone a voice first.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Output Language</Label>
+                  <Select value={outputLanguage} onValueChange={setOutputLanguage}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {indianLanguages.map((lang) => (
+                        <SelectItem key={lang.value} value={lang.value}>
+                          {lang.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-3">
+                  <Label>Speed: {speed[0].toFixed(1)}x</Label>
+                  <Slider
+                    value={speed}
+                    onValueChange={setSpeed}
+                    max={2}
+                    min={0.5}
+                    step={0.1}
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label>Pitch: {pitch[0].toFixed(1)}x</Label>
+                  <Slider
+                    value={pitch}
+                    onValueChange={setPitch}
+                    max={2}
+                    min={0.5}
+                    step={0.1}
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tone</Label>
+                  <Select value={tone} onValueChange={setTone}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tones.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button 
+                  onClick={handleGenerate}
+                  className="w-full"
+                  disabled={isGenerating || !selectedVoice || !text.trim()}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="h-4 w-4 mr-2" />
+                      Generate Speech
+                    </>
+                  )}
+=======
       {/* Main Content */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Text Input Section */}
@@ -488,6 +968,7 @@ const GenerateVoice = () => {
                 <Button type="button" variant="outline" size="sm">
                   <Upload className="h-4 w-4 mr-2" />
                   Upload File
+>>>>>>> main
                 </Button>
               </label>
               <span className="text-xs text-muted-foreground">TXT or PDF</span>
