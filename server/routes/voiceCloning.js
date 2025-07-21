@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, handleSupabaseError } from '../lib/supabase.js';
 import elevenLabsService from '../lib/elevenLabsService.js';
+import { uploadBufferToSupabaseStorage } from '../lib/supabaseStorage.js';
 
 const router = express.Router();
 
@@ -575,6 +576,88 @@ router.delete('/delete/:voice_id', async (req, res) => {
       error: 'Deletion Error',
       details: error.message || 'Failed to delete voice',
     });
+  }
+});
+
+/**
+ * @swagger
+ * /api/voice-cloning/add-voice:
+ *   post:
+ *     summary: Add a new voice from an uploaded audio file
+ *     description: Upload an audio file and save it to Supabase Storage, then insert a new voice record.
+ *     tags: [Voice Cloning]
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: audio
+ *         type: file
+ *         required: true
+ *         description: Audio file to upload (max 25MB)
+ *       - in: formData
+ *         name: name
+ *         type: string
+ *         required: true
+ *         description: Name for the new voice
+ *       - in: formData
+ *         name: category
+ *         type: string
+ *         required: true
+ *         description: Category for the new voice
+ *       - in: formData
+ *         name: language
+ *         type: string
+ *         required: true
+ *         description: Language for the new voice
+ *       - in: formData
+ *         name: description
+ *         type: string
+ *         description: Optional description for the new voice
+ *       - in: formData
+ *         name: creator_id
+ *         type: string
+ *         format: uuid
+ *         required: true
+ *         description: User ID who created this voice
+ *     responses:
+ *       201:
+ *         description: Voice added successfully
+ *       400:
+ *         description: Bad request or validation error
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/add-voice', upload.single('audio'), async (req, res) => {
+  try {
+    const { name, category, language, description, creator_id } = req.body;
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No audio file uploaded' });
+    }
+    // TODO: Ensure the 'audio' bucket exists in Supabase Storage
+    const filePath = `voices/${uuidv4()}.mp3`;
+    const audioUrl = await uploadBufferToSupabaseStorage(file.buffer, 'audio', filePath, file.mimetype);
+    // Insert into voices table
+    const { data, error } = await supabase
+      .from('voices')
+      .insert([{
+        name,
+        category,
+        language,
+        description,
+        creator_id,
+        reference_audio_id: filePath,
+        audio_storage_path: filePath,
+        // Optionally add api_speaker_id, etc.
+      }])
+      .select()
+      .single();
+    if (error) {
+      return res.status(500).json({ error: 'Failed to save voice', details: error.message });
+    }
+    res.status(201).json({ voice: data, audioUrl });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
