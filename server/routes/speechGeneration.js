@@ -2,6 +2,7 @@ import express from 'express';
 import { supabase } from '../lib/supabase.js';
 import { v4 as uuidv4 } from 'uuid';
 import elevenLabsService from '../lib/elevenLabsService.js';
+import { uploadBufferToSupabaseStorage } from '../lib/supabaseStorage.js';
 
 const router = express.Router();
 
@@ -12,10 +13,11 @@ const generateSpeechAudio = async (text, voiceId = null, options = {}) => {
   if (!result.success) {
     throw new Error('Failed to generate audio');
   }
-  // Store the audio file somewhere accessible (for now, just return a mock URL)
-  // TODO: Implement actual storage (e.g., upload to S3 or Supabase Storage)
-  // For now, return a data URL or buffer as a placeholder
-  const audioUrl = `data:audio/mpeg;base64,${Buffer.from(result.audioBuffer).toString('base64')}`;
+  // Upload the audio buffer to Supabase Storage
+  // TODO: Ensure the 'audio' bucket exists in Supabase Storage
+  const fileName = `${uuidv4()}.mp3`;
+  const filePath = `generated/${fileName}`;
+  const audioUrl = await uploadBufferToSupabaseStorage(Buffer.from(result.audioBuffer), 'audio', filePath, 'audio/mpeg');
   // Duration is not provided by ElevenLabs, so estimate based on text length
   const durationSeconds = Math.floor(text.length / 10) + 5;
   return {
@@ -53,9 +55,6 @@ router.post('/generate-speech', async (req, res) => {
       style,
       use_speaker_boost
     });
-
-    // TODO: Store the audio buffer in a real file storage (e.g., S3, Supabase Storage) and generate a downloadable URL
-    // For now, audioUrl is a data URL (not suitable for production)
 
     // Create new voice generation record
     const newGeneration = {
