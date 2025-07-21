@@ -6,6 +6,14 @@ ALTER TABLE public.voices
 ADD CONSTRAINT voices_voice_type_check 
 CHECK (voice_type IN ('conversational', 'narrative', 'ai', 'robotic', 'natural'));
 
+-- Add admin/service role insert policy for voices
+CREATE POLICY "Service role can insert any voice" 
+  ON public.voices 
+  FOR INSERT 
+  TO authenticated 
+  USING (auth.role() = 'service_role') 
+  WITH CHECK (true);
+
 -- Create generated_voices table for recent generations
 CREATE TABLE public.generated_voices (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
