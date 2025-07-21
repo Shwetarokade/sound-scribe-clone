@@ -1,28 +1,33 @@
 import express from 'express';
 import { supabase } from '../lib/supabase.js';
 import { v4 as uuidv4 } from 'uuid';
+import elevenLabsService from '../lib/elevenLabsService.js';
 
 const router = express.Router();
 
-// Mock TTS service function - replace with actual TTS service integration
-const generateSpeechAudio = async (text, voiceId = null) => {
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Mock audio URL and duration calculation
-  const mockAudioUrl = `https://example.com/audio/${uuidv4()}.mp3`;
-  const mockDurationSeconds = Math.floor(text.length / 10) + 5; // Rough estimation
-  
+// Remove the mock generateSpeechAudio function and replace with real implementation
+const generateSpeechAudio = async (text, voiceId = null, options = {}) => {
+  // Use ElevenLabs to generate audio
+  const result = await elevenLabsService.textToSpeech(text, voiceId, options);
+  if (!result.success) {
+    throw new Error('Failed to generate audio');
+  }
+  // Store the audio file somewhere accessible (for now, just return a mock URL)
+  // TODO: Implement actual storage (e.g., upload to S3 or Supabase Storage)
+  // For now, return a data URL or buffer as a placeholder
+  const audioUrl = `data:audio/mpeg;base64,${Buffer.from(result.audioBuffer).toString('base64')}`;
+  // Duration is not provided by ElevenLabs, so estimate based on text length
+  const durationSeconds = Math.floor(text.length / 10) + 5;
   return {
-    audioUrl: mockAudioUrl,
-    durationSeconds: mockDurationSeconds
+    audioUrl,
+    durationSeconds
   };
 };
 
 // POST /generate-speech
 router.post('/generate-speech', async (req, res) => {
   try {
-    const { user_id, voice_id, text } = req.body;
+    const { user_id, voice_id, text, stability, similarity_boost, style, use_speaker_boost } = req.body;
 
     // Validate required fields
     if (!user_id || !text) {
@@ -41,15 +46,23 @@ router.post('/generate-speech', async (req, res) => {
 
     console.log('Generating speech for user:', user_id, 'with text:', text.substring(0, 50) + '...');
 
-    // Generate speech audio (mock implementation)
-    const { audioUrl, durationSeconds } = await generateSpeechAudio(text, voice_id);
+    // Generate speech audio using ElevenLabs
+    const { audioUrl, durationSeconds } = await generateSpeechAudio(text, voice_id, {
+      stability,
+      similarity_boost,
+      style,
+      use_speaker_boost
+    });
+
+    // TODO: Store the audio buffer in a real file storage (e.g., S3, Supabase Storage) and generate a downloadable URL
+    // For now, audioUrl is a data URL (not suitable for production)
 
     // Create new voice generation record
     const newGeneration = {
       id: uuidv4(),
       user_id,
       voice_id: voice_id || null,
-      input_text: text,
+      text: text,
       audio_url: audioUrl,
       is_favorite: false,
       duration_seconds: durationSeconds,
